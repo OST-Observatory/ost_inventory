@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Locations — OST Inventory{% endblock %}
+{% block content %}
+<h1>Locations</h1>
+<p class="muted">A location is a <strong>room</strong> plus an optional <strong>place</strong> in that room, e.g. PRA / 2a.</p>
+
+{% if can_write %}
+<div class="form-grid location-add">
+  <form method="post" action="{% url 'inventory:location_add_room' %}" class="add-inline">
+    {% csrf_token %}
+    <label><span>Add room</span> {{ room_form.name }}</label>
+    <button type="submit">Add room</button>
+  </form>
+  <form method="post" action="{% url 'inventory:location_add_place' %}" class="add-inline add-inline-2">
+    {% csrf_token %}
+    <label><span>Room</span> {{ place_form.room }}</label>
+    <label><span>Place</span> {{ place_form.name }}</label>
+    <button type="submit">Add place</button>
+  </form>
+</div>
+{% endif %}
+
+{% if rooms %}
+  {% for room in rooms %}
+    {% with places=room.children.all %}
+    <article class="block-card location-card">
+      <header class="location-room-head">
+        <div>
+          <h2><a href="{% url 'inventory:location_detail' room.pk %}">{{ room.name }}</a></h2>
+          <p class="muted">
+            {% if places %}
+              {{ places|length }} place{{ places|length|pluralize }}
+            {% else %}
+              No places yet — items can still sit in this room.
+            {% endif %}
+          </p>
+        </div>
+        {% if can_write %}
+        <form method="post" action="{% url 'inventory:location_rename_room' room.pk %}" class="location-rename">
+          {% csrf_token %}
+          <input type="text" name="name" value="{{ room.name }}" maxlength="200" required aria-label="Rename {{ room.name }}">
+          <button type="submit" class="secondary">Rename</button>
+        </form>
+        {% endif %}
+      </header>
+      {% if places %}
+      <table>
+        <thead>
+          <tr>
+            <th>Place</th>
+            <th class="col-actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for place in places %}
+          <tr>
+            <td><a href="{% url 'inventory:location_detail' place.pk %}">{{ place.name }}</a></td>
+            <td class="col-actions">
+              {% if can_write %}
+              <form method="post" action="{% url 'inventory:location_delete_place' place.pk %}"
+                    class="inline js-confirm"
+                    {% if place.item_count %}
+                    data-confirm="Remove {{ place.name }}? {{ place.item_count }} item{{ place.item_count|pluralize }} will stay in {{ room.name }}."
+                    {% else %}
+                    data-confirm="Remove {{ place.name }} from {{ room.name }}?"
+                    {% endif %}>
+                {% csrf_token %}
+                <button type="submit" class="outline secondary">Remove</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </article>
+    {% endwith %}
+  {% endfor %}
+{% else %}
+<div class="empty-state">
+  <p>No rooms yet.</p>
+  {% if can_write %}<p class="muted">Add a room above, e.g. PRA.</p>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

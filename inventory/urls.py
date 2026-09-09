@@ -1,0 +1,79 @@
+from django.urls import path
+
+from inventory.views import (
+    CurrentLoansView,
+    ItemCreateView,
+    ItemDetailView,
+    ItemUpdateView,
+    LoanHistoryView,
+    LocationDetailView,
+    LocationListView,
+    NotSeenRecentlyView,
+    SearchView,
+    item_deactivate,
+    item_delete,
+    item_reactivate,
+    loan_create,
+    loan_return,
+    location_add_place,
+    location_add_room,
+    location_delete_place,
+    location_rename_room,
+    still_here,
+)
+from inventory.views.extras import (
+    csv_import_preview,
+    export_csv,
+    labels_ods,
+    labels_page,
+    labels_png,
+    labels_zip,
+)
+from inventory.views.stocktake import (
+    stocktake_detail,
+    stocktake_finish,
+    stocktake_index,
+    stocktake_move_here,
+)
+
+app_name = "inventory"
+
+urlpatterns = [
+    path("", SearchView.as_view(), name="search"),
+    path("items/add/", ItemCreateView.as_view(), name="item_create"),
+    path("items/<int:pk>/", ItemDetailView.as_view(), name="item_detail"),
+    path("items/<int:pk>/edit/", ItemUpdateView.as_view(), name="item_edit"),
+    path("items/<int:pk>/deactivate/", item_deactivate, name="item_deactivate"),
+    path("items/<int:pk>/reactivate/", item_reactivate, name="item_reactivate"),
+    path("items/<int:pk>/delete/", item_delete, name="item_delete"),
+    path("items/<int:pk>/loan/", loan_create, name="loan_create"),
+    path("items/<int:pk>/still-here/", still_here, name="still_here"),
+    path("loans/<int:pk>/return/", loan_return, name="loan_return"),
+    path("loans/current/", CurrentLoansView.as_view(), name="current_loans"),
+    path("loans/history/", LoanHistoryView.as_view(), name="loan_history"),
+    path("not-seen/", NotSeenRecentlyView.as_view(), name="not_seen"),
+    path("stocktake/", stocktake_index, name="stocktake"),
+    path("stocktake/<int:pk>/", stocktake_detail, name="stocktake_detail"),
+    path("stocktake/<int:pk>/finish/", stocktake_finish, name="stocktake_finish"),
+    path(
+        "stocktake/<int:pk>/scans/<int:scan_id>/move/",
+        stocktake_move_here,
+        name="stocktake_move_here",
+    ),
+    path("locations/", LocationListView.as_view(), name="locations"),
+    path("locations/add-room/", location_add_room, name="location_add_room"),
+    path("locations/add-place/", location_add_place, name="location_add_place"),
+    path("locations/<int:pk>/rename/", location_rename_room, name="location_rename_room"),
+    path(
+        "locations/<int:pk>/delete-place/",
+        location_delete_place,
+        name="location_delete_place",
+    ),
+    path("locations/<int:pk>/", LocationDetailView.as_view(), name="location_detail"),
+    path("export.csv", export_csv, name="export_csv"),
+    path("import/", csv_import_preview, name="csv_import"),
+    path("labels/", labels_page, name="labels"),
+    path("labels/zip/", labels_zip, name="labels_zip"),
+    path("labels/ods/", labels_ods, name="labels_ods"),
+    path("labels/png/", labels_png, name="labels_png"),
+]

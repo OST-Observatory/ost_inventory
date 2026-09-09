@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ group.name }} — Groups{% endblock %}
+{% block content %}
+<h1>{{ group.name }}</h1>
+{% if protected %}
+<p class="muted">This group is tied to a login role. Membership is updated at login from LDAP or the user’s role flags. You can still add extra local members.</p>
+{% endif %}
+
+<form method="post" action="{% url 'accounts:group_add_member' group.pk %}" class="add-inline">
+  {% csrf_token %}
+  <label><span>Add member</span> {{ form.username }}</label>
+  <button type="submit">Add</button>
+</form>
+
+{% if members %}
+<table>
+  <thead>
+    <tr>
+      <th>Username</th>
+      <th class="col-actions"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for member in members %}
+    <tr>
+      <td>{{ member.username }}</td>
+      <td class="col-actions">
+        <form method="post" action="{% url 'accounts:group_remove_member' group.pk member.pk %}" class="inline js-confirm"
+              data-confirm="Remove {{ member.username }} from {{ group.name }}?">
+          {% csrf_token %}
+          <button type="submit" class="outline secondary">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state"><p>No members in this group.</p></div>
+{% endif %}
+
+<p class="actions-row">
+  <a href="{% url 'accounts:groups' %}">All groups</a>
+  <a href="{% url 'accounts:access' %}">Access control</a>
+</p>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% load display %}
+{% if q or selected_category or selected_location or selected_project or selected_container or on_loan %}
+<div class="filter-chips">
+  {% if q %}
+    <a class="chip-filter" href="?{% query_without 'q' %}">“{{ q }}” ×</a>
+  {% endif %}
+  {% if selected_category %}
+    <a class="chip-filter" href="?{% query_without 'category' %}">Category ×</a>
+  {% endif %}
+  {% if selected_location %}
+    <a class="chip-filter" href="?{% query_without 'location' %}">Location ×</a>
+  {% endif %}
+  {% if selected_project %}
+    <a class="chip-filter" href="?{% query_without 'project' %}">Project ×</a>
+  {% endif %}
+  {% if selected_container %}
+    <a class="chip-filter" href="?{% query_without 'container' %}">Container ×</a>
+  {% endif %}
+  {% if on_loan %}
+    <a class="chip-filter" href="?{% query_without 'on_loan' %}">On loan ×</a>
+  {% endif %}
+</div>
+{% endif %}
+{% include "inventory/partials/item_list.html" %}

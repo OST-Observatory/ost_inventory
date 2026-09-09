@@ -1,0 +1,2 @@
+pico.min.css — @picocss/pico@2.0.6
+htmx.min.js — htmx.org@2.0.4

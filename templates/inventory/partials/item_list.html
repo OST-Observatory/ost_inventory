@@ -1,0 +1,76 @@
+{% load thumbnail %}
+{% load humanize %}
+{% load display %}
+<p class="muted">{{ page_obj.paginator.count }} item{{ page_obj.paginator.count|pluralize }}</p>
+{% if items %}
+<table>
+  <thead>
+    <tr>
+      <th></th>
+      <th>#</th>
+      <th>Name</th>
+      <th>Location</th>
+      <th>Categories</th>
+      <th>Status</th>
+      {% if can_write %}<th></th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td class="thumb">
+        {% if item.photo %}
+          <img src="{% thumbnail item.photo "list" %}" alt="">
+        {% endif %}
+      </td>
+      <td>
+        <a href="{% url 'inventory:item_detail' item.pk %}"><span class="inv-badge">{{ item.inventory_number }}</span></a>
+      </td>
+      <td><a href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a>{% if item.project %}<div class="muted">{{ item.project.name }}</div>{% endif %}</td>
+      <td>
+        <a href="{% url 'inventory:location_detail' item.location_id %}">{{ item.location.path_display }}</a>
+        {% if item.container %}<div class="muted">in {{ item.container }}</div>{% endif %}
+      </td>
+      <td>{% for c in item.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+      <td>
+        <span id="item-status-{{ item.pk }}" class="status-cell">
+          {% include "inventory/partials/status_chip.html" %}
+        </span>
+      </td>
+      {% if can_write %}
+      <td>
+        <form method="post" action="{% url 'inventory:still_here' item.pk %}" class="inline"
+              hx-post="{% url 'inventory:still_here' item.pk %}"
+              hx-target="#item-status-{{ item.pk }}"
+              hx-select="#item-status-{{ item.pk }}"
+              hx-swap="outerHTML">
+          {% csrf_token %}
+          <button type="submit" class="outline still-here-mini">Still here</button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if page_obj and page_obj.paginator.num_pages > 1 %}
+<nav class="pagination">
+  {% if page_obj.has_previous %}
+    <a href="?{% page_query page_obj.previous_page_number %}">Previous</a>
+  {% endif %}
+  <span>Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}
+    <a href="?{% page_query page_obj.next_page_number %}">Next</a>
+  {% endif %}
+</nav>
+{% endif %}
+<p class="muted">CSV export sanitizes spreadsheet formulas.</p>
+{% else %}
+<div class="empty-state">
+  <p>No items found.</p>
+  <p class="muted">Try clearing filters{% if can_write %} or <a href="{% url 'inventory:item_create' %}">add an item</a>{% endif %}.</p>
+  {% if q or selected_category or selected_location or selected_project or selected_container or on_loan %}
+    <p><a href="{% url 'inventory:search' %}">Reset search</a></p>
+  {% endif %}
+</div>
+{% endif %}

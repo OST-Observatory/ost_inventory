@@ -1,0 +1,19 @@
+[Unit]
+Description=Send OST Inventory overdue loan reminders
+After=network.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/ost_inventory
+EnvironmentFile=/opt/ost_inventory/.env
+Environment=DJANGO_ENV=production
+ExecStart=/opt/ost_inventory/.venv/bin/python manage.py send_overdue_reminders
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+UMask=0077
+MemoryMax=256M
+ReadWritePaths=/opt/ost_inventory/logs

@@ -1,0 +1,11 @@
+[Unit]
+Description=OST Inventory gunicorn socket
+
+[Socket]
+ListenStream=/run/ost-inventory/gunicorn.sock
+SocketUser=www-data
+SocketGroup=www-data
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Groups — OST Inventory{% endblock %}
+{% block content %}
+<h1>Groups</h1>
+<p class="muted"><code>student</code>, <code>supervisor</code>, and <code>staff</code> are filled from login roles and cannot be renamed or deleted. Extra groups are local to this app.</p>
+
+{% if can_admin %}
+<form method="post" action="{% url 'accounts:group_add' %}" class="add-inline">
+  {% csrf_token %}
+  <label><span>Add group</span> {{ form.name }}</label>
+  <button type="submit">Add group</button>
+</form>
+{% endif %}
+
+{% if groups %}
+<table>
+  <thead>
+    <tr>
+      <th>Group</th>
+      <th>Members</th>
+      <th class="col-actions"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for group in groups %}
+    <tr>
+      <td><a href="{% url 'accounts:group_detail' group.pk %}">{{ group.name }}</a></td>
+      <td>{{ group.member_count }}</td>
+      <td class="col-actions">
+        {% if group.name not in protected_names %}
+        <form method="post" action="{% url 'accounts:group_delete' group.pk %}" class="inline js-confirm"
+              data-confirm="Delete group {{ group.name }}?">
+          {% csrf_token %}
+          <button type="submit" class="outline secondary">Delete</button>
+        </form>
+        {% else %}
+        <span class="muted">Login role</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state"><p>No groups yet.</p></div>
+{% endif %}
+
+<p class="actions-row">
+  <a href="{% url 'accounts:access' %}">Access control</a>
+</p>
+{% endblock %}

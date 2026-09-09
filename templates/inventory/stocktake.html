@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Stocktake — OST Inventory{% endblock %}
+{% block content %}
+<h1>Stocktake</h1>
+<p class="muted">Walk room to room, scan location QRs then item QRs. Not seen stays as the rolling “still here” list; a stocktake is a dated count.</p>
+
+{% if open_stocktake %}
+<article class="block-card">
+  <h2>Open stocktake</h2>
+  <p>Started {{ open_stocktake.started_at|naturaltime }}{% if open_stocktake.scope_location %} · {{ open_stocktake.scope_location.name }}{% else %} · whole inventory{% endif %}</p>
+  <p><a href="{% url 'inventory:stocktake_detail' open_stocktake.pk %}" role="button">Continue</a></p>
+</article>
+{% else %}
+<form method="post" class="block-card">
+  {% csrf_token %}
+  <label>
+    <span>Scope</span>
+    <select name="scope_location">
+      <option value="">Whole inventory</option>
+      {% for room in rooms %}
+        <option value="{{ room.pk }}">{{ room.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Start stocktake</button>
+</form>
+{% endif %}
+
+{% if recent %}
+<h2>Recent</h2>
+<table>
+  <thead>
+    <tr><th>Started</th><th>Scope</th><th>Status</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for s in recent %}
+    <tr>
+      <td>{{ s.started_at|naturaltime }}</td>
+      <td>{% if s.scope_location %}{{ s.scope_location.name }}{% else %}Whole inventory{% endif %}</td>
+      <td>{% if s.is_open %}Open{% else %}Finished{% endif %}</td>
+      <td class="col-actions"><a href="{% url 'inventory:stocktake_detail' s.pk %}">Open</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

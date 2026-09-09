@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — OST Inventory{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p class="muted form-required-hint"><span aria-hidden="true">*</span> Required</p>
+<form method="post" enctype="multipart/form-data" class="item-form">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+
+  <section class="form-section">
+    <h2>Item</h2>
+    <label>Name * {{ form.name }}{{ form.name.errors }}</label>
+    <div class="field-row">
+      <div>
+        <label>Quantity * {{ form.quantity }}{{ form.quantity.errors }}</label>
+        <label class="checkbox">
+          {{ form.quantity_is_approximate }}
+          Approximate count
+        </label>
+        {{ form.quantity_is_approximate.errors }}
+        <p class="field-hint">Use when the exact number is unknown, e.g. screws.</p>
+      </div>
+      <label>
+        Project
+        {{ form.project_name }}
+        {{ form.project_name.errors }}
+      </label>
+    </div>
+    <datalist id="project-suggestions">
+      {% for p in projects %}
+        <option value="{{ p.name }}">
+      {% endfor %}
+    </datalist>
+    <fieldset class="category-fieldset">
+      <legend>Categories * (1–4)</legend>
+      <p class="field-hint">Pick an existing category from the list. Type a new name only if none fits.</p>
+      <div class="field-row category-slots">
+        {% for field in form.category_fields %}
+          <label>{{ field.label }} {{ field }}{{ field.errors }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <datalist id="category-suggestions">
+      {% for c in categories %}
+        <option value="{{ c.name }}">
+      {% endfor %}
+    </datalist>
+  </section>
+
+  <section class="form-section">
+    <h2>Location</h2>
+    <div class="field-row">
+      <label>
+        Room *
+        {{ form.room }}
+        {{ form.room.errors }}
+      </label>
+      <label>
+        Place
+        {{ form.place }}
+        {{ form.place.errors }}
+      </label>
+    </div>
+    <p class="field-hint">Add rooms and places under <a href="{% url 'inventory:locations' %}">Tools → Locations</a>.</p>
+    <label>
+      Container
+      {{ form.container }}
+      {{ form.container.errors }}
+    </label>
+    <datalist id="container-suggestions">
+      {% for c in containers %}
+        <option value="{{ c }}">
+      {% endfor %}
+    </datalist>
+  </section>
+
+  <section class="form-section">
+    <h2>Notes</h2>
+    <div class="field-row">
+      <label>Description {{ form.description }}{{ form.description.errors }}</label>
+      <label>Comment {{ form.comment }}{{ form.comment.errors }}</label>
+    </div>
+    <label>Photo {{ form.photo }}{{ form.photo.errors }}</label>
+  </section>
+
+  <p class="actions-row">
+    <button type="submit">Save</button>
+    <a href="{% url 'inventory:search' %}" role="button" class="secondary outline">Cancel</a>
+  </p>
+</form>
+{% endblock %}

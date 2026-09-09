@@ -1,0 +1,10 @@
+Django>=5.2.16,<6
+django-environ>=0.13,<1
+psycopg2-binary>=2.9,<3
+gunicorn>=23,<27
+Pillow>=12.3.0,<13
+easy-thumbnails>=2.8,<3
+django-import-export>=4.1.1,<5
+segno>=1.6,<2
+django-auth-ldap>=5,<6
+python-ldap>=3.4.5,<4

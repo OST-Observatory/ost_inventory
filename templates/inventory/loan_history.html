@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Loan history{% endblock %}
+{% block content %}
+<h1>Loan history</h1>
+<form method="get" class="actions-row">
+  <input type="search" name="q" value="{{ q }}" placeholder="{% if can_see_loan_pii %}Borrower, contact, item…{% else %}Item…{% endif %}">
+  <button type="submit">Search</button>
+</form>
+{% if loans %}
+<table>
+  <thead>
+    <tr>
+      <th>Item</th>
+      {% if can_see_loan_pii %}<th>Borrower</th>{% endif %}
+      <th>Borrowed</th><th>Due</th><th>Returned</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for loan in loans %}
+    <tr>
+      <td>
+        <a href="{% url 'inventory:item_detail' loan.item_id %}">
+          <span class="inv-badge">{{ loan.item.inventory_number }}</span> {{ loan.item.name }}
+        </a>
+      </td>
+      {% if can_see_loan_pii %}<td>{{ loan.borrower_name }}</td>{% endif %}
+      <td>{{ loan.borrowed_at|naturaltime }}</td>
+      <td>{{ loan.due_date }}</td>
+      <td>{% if loan.returned_at %}{{ loan.returned_at|naturaltime }}{% else %}<span class="chip chip-loaned">open</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <p>No loans found.</p>
+  {% if q %}
+    <p><a href="{% url 'inventory:loan_history' %}">Clear search</a></p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

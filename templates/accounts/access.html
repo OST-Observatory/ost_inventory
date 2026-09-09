@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Access control — OST Inventory{% endblock %}
+{% block content %}
+<h1>Access control</h1>
+<p class="muted">Permissions are granted to <strong>groups</strong>. A user receives every permission from every group they belong to.
+LDAP login still maps institute roles onto <code>student</code>, <code>supervisor</code>, and <code>staff</code>. Superusers always have every permission.</p>
+
+<form method="post" action="{% url 'accounts:access_save' %}">
+  {% csrf_token %}
+  <div class="acl-table-wrap">
+    <table class="acl-table">
+      <thead>
+        <tr>
+          <th>Group</th>
+          {% for code, label in capabilities %}
+            <th class="acl-perm"><span>{{ label }}</span></th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for group, checks in rows %}
+        <tr>
+          <th scope="row"><a href="{% url 'accounts:group_detail' group.pk %}">{{ group.name }}</a></th>
+          {% for code, label, on in checks %}
+            <td class="acl-perm">
+              <label class="acl-check" title="{{ label }}">
+                <span class="visually-hidden">{{ group.name }}: {{ label }}</span>
+                <input type="checkbox" class="acl-box" name="cap_{{ group.pk }}_{{ code }}" {% if on %}checked{% endif %}>
+              </label>
+            </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="actions-row">
+    <button type="submit">Save access</button>
+    <a href="{% url 'accounts:groups' %}" role="button" class="secondary outline">Groups</a>
+  </p>
+</form>
+{% endblock %}

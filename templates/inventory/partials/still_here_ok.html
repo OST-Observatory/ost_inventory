@@ -1,0 +1,5 @@
+{% load humanize %}
+<span id="item-status-{{ item.pk }}" class="status-cell">
+  {% include "inventory/partials/status_chip.html" %}
+</span>
+<time id="last-seen" datetime="{{ item.last_seen_at|date:'c' }}">{{ item.last_seen_at|naturaltime }}</time>

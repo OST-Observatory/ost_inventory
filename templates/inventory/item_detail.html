@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% load thumbnail %}
+{% load humanize %}
+{% load display %}
+{% block title %}{{ item.inventory_number }} {{ item.name }}{% endblock %}
+{% block content %}
+<div class="block-card">
+  <header>
+    <h1><span class="inv-badge">{{ item.inventory_number }}</span> {{ item.name }}</h1>
+    <p>
+      {% if item.is_lent %}<span class="chip chip-loaned">On loan</span>{% endif %}
+      {% if not item.is_active %}<span class="chip chip-inactive">Inactive</span>{% endif %}
+      {% if item.is_active and not item.is_lent %}<span class="chip chip-available">Available</span>{% endif %}
+    </p>
+  </header>
+
+  {% if can_write %}
+  <div class="action-bar">
+    <form method="post" action="{% url 'inventory:still_here' item.pk %}" class="inline"
+          hx-post="{% url 'inventory:still_here' item.pk %}"
+          hx-target="#last-seen"
+          hx-select="#last-seen"
+          hx-swap="outerHTML">
+      {% csrf_token %}
+      <button type="submit" class="primary-action">Still here</button>
+    </form>
+    {% if item.is_lent %}
+      {% with loan=item.current_loan %}
+      <form method="post" action="{% url 'inventory:loan_return' loan.pk %}" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="secondary">Return</button>
+      </form>
+      {% endwith %}
+    {% elif item.is_active %}
+      <a href="#loan" role="button" class="secondary">Record loan</a>
+    {% endif %}
+    <a href="{% url 'inventory:item_edit' item.pk %}" role="button" class="secondary outline">Edit</a>
+    {% if item.is_active %}
+      <form method="post" action="{% url 'inventory:item_deactivate' item.pk %}" class="inline js-confirm"
+            data-confirm="Deactivate this item?">
+        {% csrf_token %}
+        <button type="submit" class="outline secondary">Deactivate</button>
+      </form>
+    {% else %}
+      <form method="post" action="{% url 'inventory:item_reactivate' item.pk %}" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="secondary">Reactivate</button>
+      </form>
+    {% endif %}
+    {% if can_delete %}
+      <form method="post" action="{% url 'inventory:item_delete' item.pk %}" class="inline js-confirm"
+            data-confirm="Permanently delete? This cannot be undone.">
+        {% csrf_token %}
+        <button type="submit" class="outline contrast">Delete</button>
+      </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="detail-grid">
+    <div>
+      {% if item.photo %}
+        <img class="detail-photo" src="{% thumbnail item.photo "detail" %}" alt="{{ item.name }}">
+      {% endif %}
+    </div>
+    <div>
+      <dl>
+        <dt>Location</dt>
+        <dd><a href="{% url 'inventory:location_detail' item.location_id %}">{{ item.location.path_display }}</a></dd>
+        <dt>Container</dt><dd>{{ item.container|default:"—" }}</dd>
+        <dt>Quantity</dt><dd>{{ item.quantity_display }}</dd>
+        <dt>Categories</dt>
+        <dd>{% for c in item.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
+        <dt>Project</dt><dd>{% if item.project %}{{ item.project.name }}{% else %}—{% endif %}</dd>
+        <dt>Description</dt><dd>{{ item.description|linebreaksbr|default:"—" }}</dd>
+        <dt>Comment</dt><dd>{{ item.comment|linebreaksbr|default:"—" }}</dd>
+        <dt>Last seen</dt>
+        <dd><time id="last-seen" datetime="{{ item.last_seen_at|date:'c' }}">{% if item.last_seen_at %}{{ item.last_seen_at|naturaltime }}{% else %}Never{% endif %}</time></dd>
+        <dt>Updated</dt><dd>{{ item.updated_at|naturaltime }} by {{ item.updated_by }}</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+{% if item.is_lent or can_write and item.is_active %}
+<div class="block-card" id="loan">
+  {% if item.is_lent %}
+    <h2>Current loan</h2>
+    {% with loan=item.current_loan %}
+      <p>
+        {% if can_see_loan_pii %}
+          <strong>{{ loan.borrower_name }}</strong>
+          {% if loan.borrower_contact %}( {{ loan.borrower_contact }} ){% endif %}
+          —
+        {% else %}
+          On loan —
+        {% endif %}
+        <span class="{% if loan.is_overdue %}chip chip-overdue{% else %}muted{% endif %}">{{ loan.due_date|relative_due }}</span>
+        <span class="muted">({{ loan.due_date }})</span>
+      </p>
+      {% if can_write %}
+      <form method="post" action="{% url 'inventory:loan_return' loan.pk %}">
+        {% csrf_token %}
+        <button type="submit">Return</button>
+      </form>
+      {% endif %}
+    {% endwith %}
+  {% elif can_write %}
+    <h2>Loan</h2>
+    <form method="post" action="{% url 'inventory:loan_create' item.pk %}">
+      {% csrf_token %}
+      <div class="loan-form-grid">
+        <label>Borrower {{ loan_form.borrower_name }}{{ loan_form.borrower_name.errors }}</label>
+        <label>Contact {{ loan_form.borrower_contact }}{{ loan_form.borrower_contact.errors }}</label>
+        <label>Due {{ loan_form.due_date }}{{ loan_form.due_date.errors }}</label>
+        <label>Note {{ loan_form.note }}{{ loan_form.note.errors }}</label>
+      </div>
+      <button type="submit">Record loan</button>
+    </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="block-card">
+  <h2>Loan history</h2>
+  {% if loans %}
+  <table>
+    <thead>
+      <tr>
+        {% if can_see_loan_pii %}<th>Borrower</th>{% endif %}
+        <th>Borrowed</th><th>Due</th><th>Returned</th>
+        {% if can_see_loan_pii %}<th>By</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for loan in loans %}
+      <tr {% if loan.is_overdue %}class="overdue-row"{% endif %}>
+        {% if can_see_loan_pii %}
+        <td>{{ loan.borrower_name }}{% if loan.borrower_contact %}<br><small>{{ loan.borrower_contact }}</small>{% endif %}</td>
+        {% endif %}
+        <td>{{ loan.borrowed_at|naturaltime }}</td>
+        <td>
+          {{ loan.due_date|relative_due }}
+          <small class="muted">({{ loan.due_date }})</small>
+        </td>
+        <td>{% if loan.returned_at %}{{ loan.returned_at|naturaltime }}{% else %}—{% endif %}</td>
+        {% if can_see_loan_pii %}<td>{{ loan.recorded_by }}</td>{% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No loans yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

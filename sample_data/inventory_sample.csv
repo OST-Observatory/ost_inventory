@@ -1,0 +1,6 @@
+name,location_path,description,quantity,categories,item_type,comment
+Narrowband H-alpha 7nm,Observatory/Filter cabinet/Box 1,37mm mounted,1,Optics;Filters,Narrowband filter,
+USB 3 cable 2m,Lab/Drawer cables,,5,Electronics;Cables,USB,spares
+ZWO ASI294,Observatory/Camera shelf,,1,Cameras,CCD,main imaging
+Eyepiece 25mm Plossl,Observatory/Eyepiece case,,1,Optics,Eyepiece,
+Power supply 12V 5A,Lab/Electronics shelf,,2,Electronics,,

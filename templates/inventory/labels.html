@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}QR labels — OST Inventory{% endblock %}
+{% block content %}
+<h1>QR labels</h1>
+<p class="muted">Select items and locations, choose a tape size, then generate PNGs for the Katasymbol app. ODS is data only — pick the same size in the app.</p>
+
+<form method="post" id="label-form">
+  {% csrf_token %}
+  <div class="label-generate-bar">
+    <p class="label-count muted">0 labels selected</p>
+    <button type="submit">Generate labels</button>
+  </div>
+
+  <section class="block-card label-size-card">
+    <h2>Label size</h2>
+    <div class="label-size-grid">
+      {% for size in label_sizes %}
+      <label class="label-size-option">
+        <input type="radio" class="visually-hidden" name="label_size" value="{{ size.key }}" {% if size.key == selected_size %}checked{% endif %}>
+        <span class="label-sil" aria-hidden="true">
+          {% if size.layout == "cable" %}
+            <span class="label-sil-flag"></span>
+            <span class="label-sil-tab"></span>
+          {% else %}
+            <span class="label-sil-body" style="--lw: {{ size.width_mm }}; --lh: {{ size.height_mm }};"></span>
+          {% endif %}
+        </span>
+        <strong>{{ size.name }}</strong>
+        <span class="muted">{{ size.hint }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="form-grid">
+    <section class="block-card">
+      <h2>Items</h2>
+      <div class="label-toolbar">
+        <input type="search" data-filter-input="items" placeholder="Filter items…" aria-label="Filter items">
+        <button type="button" class="outline secondary" data-select-visible="items">Select visible</button>
+        <button type="button" class="outline secondary" data-clear-visible="items">Clear</button>
+      </div>
+      <div class="label-list" data-filter-list="items">
+        {% for item in items %}
+          <label data-filter-text="{{ item.inventory_number }} {{ item.name }}">
+            <input type="checkbox" name="items" value="{{ item.pk }}">
+            <span class="inv-badge">{{ item.inventory_number }}</span> {{ item.name }}
+          </label>
+        {% empty %}
+          <p>No items.</p>
+        {% endfor %}
+      </div>
+    </section>
+    <section class="block-card">
+      <h2>Locations</h2>
+      <div class="label-toolbar">
+        <input type="search" data-filter-input="locations" placeholder="Filter locations…" aria-label="Filter locations">
+        <button type="button" class="outline secondary" data-select-visible="locations">Select visible</button>
+        <button type="button" class="outline secondary" data-clear-visible="locations">Clear</button>
+      </div>
+      <div class="label-list" data-filter-list="locations">
+        {% for loc in locations %}
+          <label data-filter-text="{{ loc.path_display }}">
+            <input type="checkbox" name="locations" value="{{ loc.pk }}"> {{ loc.path_display }}
+          </label>
+        {% empty %}
+          <p>No locations.</p>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</form>
+{% endblock %}

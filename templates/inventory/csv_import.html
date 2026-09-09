@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}CSV import{% endblock %}
+{% block content %}
+<h1>CSV import</h1>
+<p>Required columns: <code>name</code>, <code>location_path</code> (<code>PRA/2a</code> = room/place).
+Optional: <code>description</code>, <code>quantity</code>, <code>quantity_approximate</code> (yes/true/1),
+<code>container</code>, <code>categories</code> (semicolon-separated, 1–4; <code>item_type</code> is merged in if present),
+<code>project</code>, <code>comment</code>. Maximum 2&nbsp;MB / 2000 rows.</p>
+
+{% if preview %}
+  <article>
+    <h2>Preview {% if preview.errors %}(with errors){% endif %}</h2>
+    <p>{{ preview.preview|length }} rows — {{ preview.errors|length }} errors</p>
+    {% if preview.errors %}
+    <ul>
+      {% for err in preview.errors %}
+        <li>Line {{ err.line }}: {{ err.error }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <table>
+      <thead><tr><th>Line</th><th>Action</th><th>Name</th><th>Location</th></tr></thead>
+      <tbody>
+        {% for row in preview.preview|slice:":30" %}
+        <tr>
+          <td>{{ row.line }}</td>
+          <td>{{ row.action }}</td>
+          <td>{{ row.name }}</td>
+          <td>{{ row.location }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if not preview.errors %}
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="confirm" value="1">
+      <p>Re-upload the same file to confirm:</p>
+      <input type="file" name="file" accept=".csv,text/csv" required>
+      <button type="submit">Confirm import</button>
+    </form>
+    {% endif %}
+  </article>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <label>CSV file <input type="file" name="file" accept=".csv,text/csv" required></label>
+  <button type="submit">Preview import</button>
+</form>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}QR label preview — {{ size.name }}{% endblock %}
+{% block content %}
+<h1>QR labels</h1>
+<p class="muted">{{ size.name }} · {{ labels|length }} label{{ labels|length|pluralize }}</p>
+<p class="muted">Save or share each PNG, then insert the image in the Katasymbol app and print. For a batch, download ODS and import it in the app using the same tape size.</p>
+
+<div class="label-preview-actions">
+  <form method="post" action="{% url 'inventory:labels_zip' %}">
+    {% csrf_token %}
+    <input type="hidden" name="label_size" value="{{ size.key }}">
+    {% for pk in item_ids %}<input type="hidden" name="items" value="{{ pk }}">{% endfor %}
+    {% for pk in location_ids %}<input type="hidden" name="locations" value="{{ pk }}">{% endfor %}
+    <button type="submit" class="secondary">Download ZIP</button>
+  </form>
+  <form method="post" action="{% url 'inventory:labels_ods' %}">
+    {% csrf_token %}
+    <input type="hidden" name="label_size" value="{{ size.key }}">
+    {% for pk in item_ids %}<input type="hidden" name="items" value="{{ pk }}">{% endfor %}
+    {% for pk in location_ids %}<input type="hidden" name="locations" value="{{ pk }}">{% endfor %}
+    <button type="submit" class="secondary">Download ODS</button>
+  </form>
+  <a href="{% url 'inventory:labels' %}" role="button" class="outline secondary">Back</a>
+</div>
+
+<div class="label-preview-grid">
+  {% for label in labels %}
+  <article class="block-card label-preview-card">
+    <img src="{{ label.data_uri }}" alt="{{ label.title }} {{ label.subtitle }}" class="label-preview-img" width="240">
+    <p><strong>{{ label.title }}</strong><br><span class="muted">{{ label.subtitle }}</span></p>
+    <div class="label-preview-buttons">
+      <a href="{% url 'inventory:labels_png' %}?kind={{ label.kind }}&amp;id={{ label.pk }}&amp;size={{ size.key }}" download="{{ label.filename }}" role="button" class="secondary outline">Download PNG</a>
+      <button type="button" class="secondary" data-share-png="{{ label.data_uri }}" data-share-name="{{ label.filename }}">Share</button>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endblock %}

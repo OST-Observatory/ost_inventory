@@ -1,0 +1,103 @@
+{% load static %}
+{% load display %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}OST Inventory{% endblock %}</title>
+  <script src="{% static 'theme.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'vendor/pico.min.css' %}">
+  <script src="{% static 'vendor/htmx.min.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'app.css' %}">
+  <script src="{% static 'app.js' %}" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <nav class="container-fluid site-nav">
+    <ul class="nav-brand">
+      <li><strong><a href="{% url 'inventory:search' %}">OST Inventory</a></strong></li>
+    </ul>
+    {% if user.is_authenticated %}
+    <details class="nav-drawer">
+      <summary class="nav-drawer-toggle">
+        <span class="nav-hamburger" aria-hidden="true"></span>
+        <span class="visually-hidden">Menu</span>
+        {% if overdue_loan_count %}<span class="badge-count">{{ overdue_loan_count }}</span>{% endif %}
+      </summary>
+      <ul class="nav-links">
+        <li>
+          <a href="{% url 'inventory:search' %}" {% if current_url_name == "search" %}aria-current="page"{% endif %}>Search</a>
+        </li>
+        <li>
+          <a href="{% url 'inventory:current_loans' %}" {% if current_url_name == "current_loans" %}aria-current="page"{% endif %}>
+            On loan
+            {% if overdue_loan_count %}<span class="badge-count">{{ overdue_loan_count }}</span>{% endif %}
+          </a>
+        </li>
+        <li>
+          <a href="{% url 'inventory:not_seen' %}" {% if current_url_name == "not_seen" %}aria-current="page"{% endif %}>Not seen</a>
+        </li>
+        {% if can_write %}
+        <li>
+          <a href="{% url 'inventory:stocktake' %}" {% if current_url_name == "stocktake" or current_url_name == "stocktake_detail" %}aria-current="page"{% endif %}>
+            Stocktake
+            {% if active_stocktake_id %}<span class="badge-count">1</span>{% endif %}
+          </a>
+        </li>
+        {% endif %}
+        <li>
+          <details class="tools-menu">
+            <summary>Tools</summary>
+            <div class="tools-panel">
+              {% if can_write %}
+                <a href="{% url 'inventory:item_create' %}">Add item</a>
+                <a href="{% url 'inventory:locations' %}">Locations</a>
+              {% endif %}
+              {% if can_labels %}
+                <a href="{% url 'inventory:labels' %}">QR labels</a>
+              {% endif %}
+              {% if can_import %}
+                <a href="{% url 'inventory:csv_import' %}">Import</a>
+              {% endif %}
+              <a href="{% url 'inventory:loan_history' %}">History</a>
+            </div>
+          </details>
+        </li>
+        {% if can_admin %}
+        <li>
+          <details class="tools-menu">
+            <summary>Admin</summary>
+            <div class="tools-panel">
+              <a href="{% url 'accounts:access' %}" {% if current_url_name == "access" %}aria-current="page"{% endif %}>Access control</a>
+              <a href="{% url 'accounts:groups' %}" {% if current_url_namespace == "accounts" and current_url_name != "access" %}aria-current="page"{% endif %}>Groups</a>
+              {% if user.is_staff %}
+                <a href="{% url 'admin:index' %}">Django admin</a>
+              {% endif %}
+            </div>
+          </details>
+        </li>
+        {% endif %}
+        <li class="nav-user">
+          <span class="nav-identity">{{ user.username }}</span>
+          <button type="button" class="nav-action" data-theme-toggle>Theme</button>
+          <form method="post" action="{% url 'logout' %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="nav-action">Log out</button>
+          </form>
+        </li>
+      </ul>
+    </details>
+    {% endif %}
+  </nav>
+  <main class="container">
+    {% if messages %}
+      {% for message in messages %}
+        <article class="flash {{ message.tags }}">{{ message }}</article>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{% if item.open_loans or item.is_lent %}
+  <span class="chip chip-loaned">On loan</span>
+{% elif not item.is_active %}
+  <span class="chip chip-inactive">Inactive</span>
+{% else %}
+  <span class="chip chip-available">Available</span>
+{% endif %}
+{% if item.last_seen_at %}
+  {% load humanize %}
+  <small class="muted">Seen {{ item.last_seen_at|naturaltime }}</small>
+{% endif %}

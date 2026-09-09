@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Stocktake {{ stocktake.pk }} — OST Inventory{% endblock %}
+{% block content %}
+<p class="muted"><a href="{% url 'inventory:stocktake' %}">All stocktakes</a></p>
+<h1>Stocktake {% if stocktake.scope_location %}· {{ stocktake.scope_location.name }}{% endif %}</h1>
+<p class="muted">
+  Started {{ stocktake.started_at|naturaltime }}
+  · {{ report.scan_count }} scanned of {{ expected_total }} expected
+  {% if stocktake.finished_at %} · finished {{ stocktake.finished_at|naturaltime }}{% endif %}
+</p>
+
+{% if stocktake.is_open %}
+<section class="block-card stocktake-scan-card">
+  <h2>Scan</h2>
+  <p>
+    Current place:
+    {% if stocktake.current_location %}
+      <strong>{{ stocktake.current_location.path_display }}</strong>
+    {% else %}
+      <span class="muted">Scan a location QR first</span>
+    {% endif %}
+  </p>
+  <div class="stocktake-camera">
+    <video id="stocktake-video" playsinline autoplay muted hidden></video>
+    <p id="stocktake-camera-fallback" class="muted">Use the phone camera app on a QR label, or start the scanner below if this browser supports it.</p>
+    <button type="button" class="secondary" id="stocktake-camera-start" hidden>Start camera</button>
+    <button type="button" class="outline secondary" id="stocktake-camera-stop" hidden>Stop camera</button>
+  </div>
+  <form method="post" action="{% url 'inventory:stocktake_finish' stocktake.pk %}" class="inline js-confirm" data-confirm="Finish this stocktake?">
+    {% csrf_token %}
+    <button type="submit">Finish stocktake</button>
+  </form>
+</section>
+
+{% if here_items %}
+<section class="block-card">
+  <h2>Expected here</h2>
+  <table>
+    <thead><tr><th>#</th><th>Name</th><th></th></tr></thead>
+    <tbody>
+      {% for row in here_items %}
+      <tr>
+        <td><span class="inv-badge">{{ row.item.inventory_number }}</span></td>
+        <td>{{ row.item.name }}</td>
+        <td>{% if row.scanned %}Scanned{% else %}<span class="muted">Waiting</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endif %}
+
+<section class="block-card">
+  <h2>Found here</h2>
+  {% if report.found_here %}
+  <table>
+    <thead><tr><th>#</th><th>Name</th><th>Location</th></tr></thead>
+    <tbody>
+      {% for scan in report.found_here %}
+      <tr>
+        <td><a href="{% url 'inventory:item_detail' scan.item_id %}"><span class="inv-badge">{{ scan.item.inventory_number }}</span></a></td>
+        <td>{{ scan.item.name }}</td>
+        <td>{{ scan.expected_location.path_display }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">None yet.</p>
+  {% endif %}
+</section>
+
+<section class="block-card">
+  <h2>Found elsewhere</h2>
+  {% if report.found_elsewhere %}
+  <table>
+    <thead><tr><th>#</th><th>Name</th><th>Expected</th><th>Found at</th><th></th></tr></thead>
+    <tbody>
+      {% for scan in report.found_elsewhere %}
+      <tr>
+        <td><a href="{% url 'inventory:item_detail' scan.item_id %}"><span class="inv-badge">{{ scan.item.inventory_number }}</span></a></td>
+        <td>{{ scan.item.name }}</td>
+        <td>{{ scan.expected_location.path_display }}</td>
+        <td>{{ scan.found_location.path_display }}</td>
+        <td class="col-actions">
+          <form method="post" action="{% url 'inventory:stocktake_move_here' stocktake.pk scan.pk %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="outline secondary">Move here</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">None.</p>
+  {% endif %}
+</section>
+
+{% if report.found_unlocated %}
+<section class="block-card">
+  <h2>Found (no place scanned)</h2>
+  <table>
+    <thead><tr><th>#</th><th>Name</th><th>Recorded location</th></tr></thead>
+    <tbody>
+      {% for scan in report.found_unlocated %}
+      <tr>
+        <td><span class="inv-badge">{{ scan.item.inventory_number }}</span></td>
+        <td>{{ scan.item.name }}</td>
+        <td>{{ scan.expected_location.path_display }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if report.unexpected %}
+<section class="block-card">
+  <h2>Outside scope</h2>
+  <table>
+    <thead><tr><th>#</th><th>Name</th><th>Belongs in</th></tr></thead>
+    <tbody>
+      {% for scan in report.unexpected %}
+      <tr>
+        <td><span class="inv-badge">{{ scan.item.inventory_number }}</span></td>
+        <td>{{ scan.item.name }}</td>
+        <td>{{ scan.expected_location.path_display }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="block-card">
+  <h2>Not found</h2>
+  {% if report.missing %}
+  <table>
+    <thead><tr><th>#</th><th>Name</th><th>Location</th></tr></thead>
+    <tbody>
+      {% for item in report.missing %}
+      <tr>
+        <td><a href="{% url 'inventory:item_detail' item.pk }}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.location.path_display }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">{% if stocktake.is_open %}Nothing missing yet — or nothing expected in this scope.{% else %}All expected items were scanned.{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Not confirmed recently{% endblock %}
+{% block content %}
+<h1>Not confirmed recently</h1>
+<p class="muted">Items sorted by last “Still here” confirmation (never confirmed first). Use this list for shelf checks.</p>
+{% if items %}
+<table>
+  <thead>
+    <tr><th>#</th><th>Name</th><th>Location</th><th>Last seen</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td><a href="{% url 'inventory:item_detail' item.pk %}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
+      <td><a href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a></td>
+      <td><a href="{% url 'inventory:location_detail' item.location_id %}">{{ item.location.path_display }}</a></td>
+      <td>
+        <span id="item-status-{{ item.pk }}">
+          {% if item.last_seen_at %}{{ item.last_seen_at|naturaltime }}{% else %}Never{% endif %}
+        </span>
+      </td>
+      <td>
+        {% if can_write %}
+        <form method="post" action="{% url 'inventory:still_here' item.pk %}" class="inline"
+              hx-post="{% url 'inventory:still_here' item.pk %}"
+              hx-target="#item-status-{{ item.pk }}"
+              hx-select="#last-seen"
+              hx-swap="innerHTML">
+          {% csrf_token %}
+          <button type="submit" class="outline still-here-mini">Still here</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <p>No active items to confirm.</p>
+  <p class="muted"><a href="{% url 'inventory:search' %}">Go to search</a></p>
+</div>
+{% endif %}
+{% endblock %}
