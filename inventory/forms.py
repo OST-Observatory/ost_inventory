@@ -1,5 +1,6 @@
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 from inventory.images import process_item_photo
 from inventory.validators import reject_newlines, validate_optional_email_or_text
@@ -86,6 +87,7 @@ class ItemForm(forms.ModelForm):
             "quantity",
             "quantity_is_approximate",
             "container",
+            "installed_in",
             "comment",
             "photo",
         ]
@@ -109,6 +111,7 @@ class ItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["quantity"].required = True
         self.fields["quantity_is_approximate"].label = "Approximate count"
+        self.fields["room"].required = False
         self.fields["room"].queryset = Location.objects.filter(parent__isnull=True).order_by(
             "name"
         )
@@ -130,6 +133,20 @@ class ItemForm(forms.ModelForm):
             existing = list(self.instance.categories.all()[:MAX_CATEGORIES])
             for i, cat in enumerate(existing, start=1):
                 self.fields[f"category_{i}"].initial = cat.name
+        host_qs = Item.objects.filter(is_active=True).order_by("name")
+        if self.instance.pk:
+            exclude_pks = [self.instance.pk, *self.instance.installed_part_pks()]
+            host_qs = host_qs.exclude(pk__in=exclude_pks)
+            if self.instance.installed_in_id:
+                host_qs = Item.objects.filter(
+                    Q(pk__in=host_qs.values("pk")) | Q(pk=self.instance.installed_in_id)
+                ).order_by("name")
+        self.fields["installed_in"].queryset = host_qs
+        self.fields["installed_in"].required = False
+        self.fields["installed_in"].empty_label = "Not installed in another item"
+        self.fields["installed_in"].label_from_instance = (
+            lambda obj: f"{obj.inventory_number} {obj.name}"
+        )
 
     def category_fields(self):
         return [self[name] for name in CATEGORY_SLOTS]
@@ -165,8 +182,13 @@ class ItemForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        installed_in = cleaned.get("installed_in")
         room = cleaned.get("room")
         place = cleaned.get("place")
+        if installed_in and self.instance.pk and installed_in.pk == self.instance.pk:
+            self.add_error("installed_in", "An item cannot be installed in itself.")
+        elif not installed_in and not room:
+            self.add_error("room", "Select a room.")
         if place and room and place.parent_id != room.pk:
             self.add_error("place", "Place must belong to the selected room.")
         names = []
@@ -195,7 +217,10 @@ class ItemForm(forms.ModelForm):
         item = super().save(commit=False)
         room = self.cleaned_data["room"]
         place = self.cleaned_data.get("place")
-        item.location = place or room
+        if item.installed_in_id:
+            item.location = item.installed_in.location
+        else:
+            item.location = place or room
         project_name = self.cleaned_data.get("project_name", "")
         project, _ = Project.get_or_create_by_name(project_name)
         item.project = project if project_name.strip() else None

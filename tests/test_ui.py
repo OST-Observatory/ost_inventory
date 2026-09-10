@@ -40,7 +40,7 @@ class UiNavTests(TestCase):
         self.assertNotContains(resp, "Import")
         self.assertNotContains(resp, "Stocktake")
         self.assertNotContains(resp, "QR labels")
-        self.assertContains(resp, "History")
+        self.assertContains(resp, "Loan history")
         self.assertContains(resp, "On loan")
         self.assertContains(resp, "Not seen")
         self.assertContains(resp, "Tools")
@@ -237,6 +237,7 @@ class CsvImportPageTests(TestCase):
         self.assertContains(resp, "import-columns")
         self.assertContains(resp, "Preview import")
         self.assertContains(resp, "location_path")
+        self.assertContains(resp, "installed_in")
 
     def test_preview_and_confirm_without_reupload(self):
         csv_body = b"name,location_path\nScope,Lab\n"

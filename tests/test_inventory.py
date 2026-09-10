@@ -506,3 +506,113 @@ class StocktakeFlowTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.elsewhere.refresh_from_db()
         self.assertEqual(self.elsewhere.location_id, self.place.pk)
+
+
+class InstalledInTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="writer", password="x", is_supervisor=True
+        )
+        self.lab = Location.objects.create(name="Lab")
+        self.dome = Location.objects.create(name="Dome")
+        self.scope = Item.objects.create(
+            name="Telescope",
+            location=self.lab,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.camera = Item.objects.create(
+            name="Camera",
+            location=self.dome,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client = Client()
+        self.client.login(username="writer", password="x")
+
+    def test_form_installs_item_and_copies_host_location(self):
+        resp = self.client.post(
+            reverse("inventory:item_edit", args=[self.camera.pk]),
+            {
+                "name": "Camera",
+                "quantity": 1,
+                "category_1": "Imaging",
+                "installed_in": self.scope.pk,
+                "description": "",
+                "comment": "",
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.camera.refresh_from_db()
+        self.assertEqual(self.camera.installed_in_id, self.scope.pk)
+        self.assertEqual(self.camera.location_id, self.lab.pk)
+
+    def test_create_installed_item_without_room(self):
+        resp = self.client.post(
+            reverse("inventory:item_create"),
+            {
+                "name": "Guide camera",
+                "quantity": 1,
+                "category_1": "Imaging",
+                "installed_in": self.scope.pk,
+                "description": "",
+                "comment": "",
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+        item = Item.objects.get(name="Guide camera")
+        self.assertEqual(item.installed_in_id, self.scope.pk)
+        self.assertEqual(item.location_id, self.lab.pk)
+
+    def test_host_location_change_cascades_to_nested_parts(self):
+        self.camera.installed_in = self.scope
+        self.camera.save()
+        sensor = Item.objects.create(
+            name="Sensor",
+            location=self.dome,
+            created_by=self.user,
+            updated_by=self.user,
+            installed_in=self.camera,
+        )
+        sensor.refresh_from_db()
+        self.assertEqual(sensor.location_id, self.lab.pk)
+        self.scope.location = self.dome
+        self.scope.save()
+        self.camera.refresh_from_db()
+        sensor.refresh_from_db()
+        self.assertEqual(self.camera.location_id, self.dome.pk)
+        self.assertEqual(sensor.location_id, self.dome.pk)
+
+    def test_cycle_and_self_install_rejected(self):
+        from django.core.exceptions import ValidationError
+        from django.db.models.deletion import ProtectedError
+
+        self.camera.installed_in = self.scope
+        self.camera.save()
+        self.scope.installed_in = self.camera
+        with self.assertRaises(ValidationError):
+            self.scope.full_clean()
+        self.scope.installed_in = self.scope
+        with self.assertRaises(ValidationError):
+            self.scope.full_clean()
+        self.scope.installed_in = None
+        with self.assertRaises(ProtectedError):
+            self.scope.delete()
+
+    def test_detail_list_and_search(self):
+        self.camera.installed_in = self.scope
+        self.camera.save()
+        detail = self.client.get(reverse("inventory:item_detail", args=[self.camera.pk]))
+        self.assertContains(detail, "Installed in")
+        self.assertContains(detail, self.scope.inventory_number)
+        self.assertContains(detail, "Telescope")
+        host = self.client.get(reverse("inventory:item_detail", args=[self.scope.pk]))
+        self.assertContains(host, "Installed parts")
+        self.assertContains(host, "Camera")
+        listing = self.client.get(reverse("inventory:search"))
+        self.assertContains(listing, "installed in")
+        found = self.client.get(reverse("inventory:search"), {"q": "Telescope"})
+        self.assertContains(found, "Camera")
+        create = self.client.get(reverse("inventory:item_create"))
+        self.assertContains(create, "Installed in")
+        self.assertContains(create, "Not installed in another item")

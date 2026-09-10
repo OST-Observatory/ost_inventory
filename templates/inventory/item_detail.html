@@ -73,6 +73,22 @@
       <dl>
         <dt>Location</dt>
         <dd><a href="{% url 'inventory:location_detail' item.location_id %}">{{ item.location.path_display }}</a></dd>
+        <dt>Installed in</dt>
+        <dd>
+          {% if item.installed_in %}
+            <a href="{% url 'inventory:item_detail' item.installed_in_id %}">{{ item.installed_in.inventory_number }} {{ item.installed_in.name }}</a>
+          {% else %}—{% endif %}
+        </dd>
+        {% with parts=item.installed_parts.all %}
+        {% if parts %}
+        <dt>Installed parts</dt>
+        <dd>
+          {% for part in parts %}
+            <a href="{% url 'inventory:item_detail' part.pk %}">{{ part.inventory_number }} {{ part.name }}</a>{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </dd>
+        {% endif %}
+        {% endwith %}
         <dt>Container</dt><dd>{{ item.container|default:"—" }}</dd>
         <dt>Quantity</dt><dd>{{ item.quantity_display }}</dd>
         <dt>Categories</dt>

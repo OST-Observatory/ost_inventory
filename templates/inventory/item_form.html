@@ -61,7 +61,13 @@
         {{ form.place.errors }}
       </label>
     </div>
-    <p class="field-hint">Add rooms and places under <a href="{% url 'inventory:locations' %}">Tools → Locations</a>.</p>
+    <p class="field-hint">Add rooms and places under <a href="{% url 'inventory:locations' %}">Tools → Locations</a>. Location follows the host if this item is installed in another item.</p>
+    <label>
+      Installed in
+      {{ form.installed_in }}
+      {{ form.installed_in.errors }}
+    </label>
+    <p class="field-hint">Use when this item lives inside another inventory item, e.g. a camera in a telescope.</p>
     <label>
       Container
       {{ form.container }}

@@ -32,6 +32,7 @@
         <td><a href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a>{% if item.project %}<div class="muted">{{ item.project.name }}</div>{% endif %}</td>
         <td>
           <a href="{% url 'inventory:location_detail' item.location_id %}">{{ item.location.path_display }}</a>
+          {% if item.installed_in %}<div class="muted">installed in {{ item.installed_in.inventory_number }} {{ item.installed_in.name }}</div>{% endif %}
           {% if item.container %}<div class="muted">in {{ item.container }}</div>{% endif %}
         </td>
         <td>{% for c in item.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>

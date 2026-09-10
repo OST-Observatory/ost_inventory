@@ -95,7 +95,7 @@ def _labels_form_context(request, extra=None):
 def export_csv(request):
     qs = visible_items(
         request.user,
-        Item.objects.select_related("location", "location__parent", "project").prefetch_related("categories"),
+        Item.objects.select_related("location", "location__parent", "project", "installed_in").prefetch_related("categories"),
     )
     qs = filter_items(
         qs,
@@ -120,6 +120,7 @@ def export_csv(request):
             "quantity_approximate",
             "location_path",
             "container",
+            "installed_in",
             "categories",
             "project",
             "comment",
@@ -138,6 +139,7 @@ def export_csv(request):
                 "yes" if item.quantity_is_approximate else "",
                 sanitize_csv_cell(item.location.path_display()),
                 sanitize_csv_cell(item.container),
+                sanitize_csv_cell(item.installed_in.inventory_number if item.installed_in_id else ""),
                 sanitize_csv_cell(";".join(c.name for c in item.categories.all())),
                 sanitize_csv_cell(item.project.name if item.project else ""),
                 sanitize_csv_cell(item.comment),

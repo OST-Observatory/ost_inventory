@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Count, F, OrderBy, Prefetch, Q
+from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -44,7 +45,9 @@ class SearchView(ReadRequiredMixin, ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        qs = Item.objects.select_related("location", "location__parent", "project").prefetch_related(
+        qs = Item.objects.select_related(
+            "location", "location__parent", "project", "installed_in"
+        ).prefetch_related(
             "categories",
             Prefetch(
                 "loans",
@@ -98,8 +101,13 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
         return visible_items(
             self.request.user,
             Item.objects.select_related(
-                "location", "location__parent", "project", "created_by", "updated_by"
-            ).prefetch_related("categories", "loans__recorded_by"),
+                "location",
+                "location__parent",
+                "project",
+                "created_by",
+                "updated_by",
+                "installed_in",
+            ).prefetch_related("categories", "loans__recorded_by", "installed_parts"),
         )
 
     def get(self, request, *args, **kwargs):
@@ -203,7 +211,14 @@ def item_delete(request, pk):
         return redirect("inventory:item_detail", pk=pk)
     if request.method != "POST":
         return HttpResponseBadRequest("POST required")
-    item.delete()
+    try:
+        item.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            "Reassign or remove installed parts before deleting this item.",
+        )
+        return redirect("inventory:item_detail", pk=pk)
     messages.warning(request, "Item permanently deleted.")
     return redirect("inventory:search")
 
@@ -299,7 +314,7 @@ class NotSeenRecentlyView(ReadRequiredMixin, ListView):
     def get_queryset(self):
         return (
             Item.objects.filter(is_active=True)
-            .select_related("location", "location__parent", "project")
+            .select_related("location", "location__parent", "project", "installed_in")
             .order_by(OrderBy(F("last_seen_at"), descending=False, nulls_first=True))
         )
 
@@ -439,7 +454,7 @@ class LocationDetailView(ReadRequiredMixin, DetailView):
         ids = self.object.get_descendant_ids()
         ctx["items"] = (
             Item.objects.filter(is_active=True, location_id__in=ids)
-            .select_related("location", "location__parent", "project")
+            .select_related("location", "location__parent", "project", "installed_in")
             .order_by("name")
         )
         ctx["children"] = self.object.children.order_by("name")

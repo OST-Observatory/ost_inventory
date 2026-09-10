@@ -45,3 +45,26 @@ class ImportCommandTests(TransactionTestCase):
             self.assertEqual(item.project.name, "Outreach")
         finally:
             Path(path).unlink(missing_ok=True)
+
+    def test_installed_in_column(self):
+        loc = Location.objects.create(name="Lab")
+        host = Item.objects.create(
+            name="Telescope",
+            location=loc,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        csv_body = (
+            "name,location_path,categories,installed_in\n"
+            f"Camera,Dome,Imaging,{host.inventory_number}\n"
+        )
+        with NamedTemporaryFile("w", suffix=".csv", delete=False) as fh:
+            fh.write(csv_body)
+            path = fh.name
+        try:
+            call_command("import_inventory", file=path)
+            camera = Item.objects.get(name="Camera")
+            self.assertEqual(camera.installed_in_id, host.pk)
+            self.assertEqual(camera.location_id, loc.pk)
+        finally:
+            Path(path).unlink(missing_ok=True)

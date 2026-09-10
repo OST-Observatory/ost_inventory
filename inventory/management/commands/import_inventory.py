@@ -2,6 +2,7 @@ import csv
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
@@ -15,6 +16,15 @@ _TRUE_VALUES = {"1", "true", "yes", "y", "approx", "approximate"}
 
 def _as_bool(raw: str) -> bool:
     return raw.strip().lower() in _TRUE_VALUES
+
+
+def _flatten_validation(exc: ValidationError):
+    if hasattr(exc, "message_dict"):
+        messages = []
+        for msgs in exc.message_dict.values():
+            messages.extend(msgs)
+        return messages
+    return exc.messages
 
 
 def _limits():
@@ -88,6 +98,37 @@ def import_rows(rows, *, user, dry_run=True):
                 errors.append({"line": line, "error": f"location: {exc}"})
                 continue
 
+            host = None
+            clear_installed = False
+            if "installed_in" in row:
+                installed_raw = row.get("installed_in", "").strip()
+                if installed_raw:
+                    host = Item.lookup_by_ref(installed_raw)
+                    if host is None:
+                        probe = (
+                            installed_raw[1:].strip()
+                            if installed_raw.startswith("#")
+                            else installed_raw
+                        )
+                        if not probe.isdigit():
+                            errors.append(
+                                {
+                                    "line": line,
+                                    "error": "installed_in must be an inventory number such as #0004",
+                                }
+                            )
+                        else:
+                            errors.append(
+                                {
+                                    "line": line,
+                                    "error": f"installed_in item {installed_raw} was not found",
+                                }
+                            )
+                        continue
+                    location = host.location
+                else:
+                    clear_installed = True
+
             quantity_raw = row.get("quantity", "").strip() or "1"
             try:
                 quantity = int(quantity_raw)
@@ -157,12 +198,27 @@ def import_rows(rows, *, user, dry_run=True):
                     existing.quantity_is_approximate = quantity_is_approximate
                 existing.comment = row.get("comment", existing.comment)
                 existing.updated_by = user
+                if host:
+                    existing.installed_in = host
+                    existing.location = host.location
+                elif clear_installed:
+                    existing.installed_in = None
+                try:
+                    existing.clean()
+                except ValidationError as exc:
+                    errors.append(
+                        {
+                            "line": line,
+                            "error": "; ".join(_flatten_validation(exc)),
+                        }
+                    )
+                    continue
                 existing.save()
                 if categories:
                     existing.categories.set(categories)
                 updated += 1
             else:
-                item = Item.objects.create(
+                item = Item(
                     name=name,
                     description=row.get("description", ""),
                     quantity=quantity,
@@ -170,10 +226,22 @@ def import_rows(rows, *, user, dry_run=True):
                     project=project,
                     location=location,
                     container=container,
+                    installed_in=host,
                     comment=row.get("comment", ""),
                     created_by=user,
                     updated_by=user,
                 )
+                try:
+                    item.clean()
+                except ValidationError as exc:
+                    errors.append(
+                        {
+                            "line": line,
+                            "error": "; ".join(_flatten_validation(exc)),
+                        }
+                    )
+                    continue
+                item.save()
                 if categories:
                     item.categories.set(categories)
                 created += 1

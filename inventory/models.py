@@ -1,3 +1,6 @@
+from collections import deque
+
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Lower
@@ -152,6 +155,14 @@ class Item(models.Model):
         blank=True,
         help_text="Box, crate, or bag this item is stored in.",
     )
+    installed_in = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="installed_parts",
+        help_text="Another inventory item this one is built into.",
+    )
     comment = models.TextField(blank=True)
     photo = models.ImageField(upload_to=item_photo_upload_to, null=True, blank=True)
     categories = models.ManyToManyField(Category, blank=True, related_name="items")
@@ -174,6 +185,7 @@ class Item(models.Model):
             models.Index(fields=["last_seen_at"]),
             models.Index(fields=["container"]),
             models.Index(fields=["project"]),
+            models.Index(fields=["installed_in"]),
         ]
 
     def __str__(self):
@@ -199,10 +211,80 @@ class Item(models.Model):
             return f"~{self.quantity}"
         return str(self.quantity)
 
+    @classmethod
+    def lookup_by_ref(cls, raw: str):
+        """Resolve an inventory number or numeric id such as '#0004' or '4'."""
+        text = (raw or "").strip()
+        if text.startswith("#"):
+            text = text[1:].strip()
+        if not text.isdigit():
+            return None
+        return cls.objects.filter(pk=int(text)).first()
+
+    def installed_part_pks(self):
+        pks = []
+        queue = deque(self.installed_parts.values_list("pk", flat=True))
+        while queue:
+            pk = queue.popleft()
+            pks.append(pk)
+            queue.extend(
+                type(self).objects.filter(installed_in_id=pk).values_list("pk", flat=True)
+            )
+        return pks
+
     def clean(self):
         super().clean()
         reject_newlines(self.name, "Name")
         reject_newlines(self.container, "Container")
+        if not self.installed_in_id:
+            return
+        if self.pk and self.installed_in_id == self.pk:
+            raise ValidationError(
+                {"installed_in": "An item cannot be installed in itself."}
+            )
+        host_id = self.installed_in_id
+        seen = {self.pk} if self.pk else set()
+        while host_id:
+            if host_id in seen:
+                raise ValidationError(
+                    {"installed_in": "That would create a loop of installed items."}
+                )
+            seen.add(host_id)
+            host_id = (
+                type(self)
+                .objects.filter(pk=host_id)
+                .values_list("installed_in_id", flat=True)
+                .first()
+            )
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        previous_location_id = None
+        if self.pk:
+            previous_location_id = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("location_id", flat=True)
+                .first()
+            )
+        if update_fields is None and self.installed_in_id:
+            host_location_id = (
+                type(self)
+                .objects.filter(pk=self.installed_in_id)
+                .values_list("location_id", flat=True)
+                .first()
+            )
+            if host_location_id:
+                self.location_id = host_location_id
+        super().save(*args, **kwargs)
+        if previous_location_id and previous_location_id != self.location_id:
+            self._cascade_location_to_installed_parts()
+
+    def _cascade_location_to_installed_parts(self):
+        for pk in self.installed_part_pks():
+            type(self).objects.filter(pk=pk).exclude(location_id=self.location_id).update(
+                location_id=self.location_id
+            )
 
     def mark_seen(self):
         self.last_seen_at = timezone.now()

@@ -34,6 +34,7 @@ def filter_items(
                 + SearchVector("categories__name", weight="B")
                 + SearchVector("project__name", weight="B")
                 + SearchVector("container", weight="B")
+                + SearchVector("installed_in__name", weight="B")
             )
             query = SearchQuery(q)
             queryset = (
@@ -53,6 +54,7 @@ def filter_items(
                 | Q(categories__name__icontains=q)
                 | Q(project__name__icontains=q)
                 | Q(container__icontains=q)
+                | Q(installed_in__name__icontains=q)
             )
 
     if category:
