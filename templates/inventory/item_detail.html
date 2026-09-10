@@ -26,6 +26,19 @@
       {% csrf_token %}
       <button type="submit">Still here</button>
     </form>
+    <form method="post" action="{% url 'inventory:item_photo' item.pk %}" enctype="multipart/form-data"
+          class="inline js-photo-capture"
+          {% if item.photo %}data-confirm="Replace the current photo?"{% endif %}>
+      {% csrf_token %}
+      <label class="photo-capture">
+        <input type="file" name="photo" accept="image/*" capture="environment"
+               aria-label="{% if item.photo %}Replace photo{% else %}Take photo{% endif %}">
+        {% if item.photo %}Replace photo{% else %}Take photo{% endif %}
+      </label>
+      <noscript>
+        <button type="submit">Save photo</button>
+      </noscript>
+    </form>
     {% endif %}
     {% if can_labels and item.is_active %}
     <button type="button" data-dialog-open="qr-label-dialog">QR label</button>

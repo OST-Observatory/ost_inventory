@@ -396,7 +396,7 @@ h2 { margin-top: 0; }
 .action-bar { margin: 0.75rem 0 1rem; }
 .action-bar .inline { margin: 0; }
 .ost-btn,
-.action-bar :is(button, a[role="button"]) {
+.action-bar :is(button, a[role="button"], .photo-capture) {
   width: auto;
   height: auto;
   min-height: 2.15rem;
@@ -413,12 +413,36 @@ h2 { margin-top: 0; }
 }
 .ost-btn:hover,
 .ost-btn:focus,
-.action-bar :is(button, a[role="button"]):hover,
-.action-bar :is(button, a[role="button"]):focus {
+.action-bar :is(button, a[role="button"], .photo-capture):hover,
+.action-bar :is(button, a[role="button"], .photo-capture):focus {
   color: var(--ost-ink);
   background: var(--ost-bg);
   border-color: var(--ost-accent);
   box-shadow: none;
+}
+.action-bar .photo-capture {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  margin-bottom: 0;
+}
+.action-bar .photo-capture input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 0;
+  border: 0;
+}
+.action-bar .photo-capture input[type="file"]::file-selector-button {
+  display: none;
 }
 .toolbar :is(button, a[role="button"]),
 .actions-row :is(button, a[role="button"]),

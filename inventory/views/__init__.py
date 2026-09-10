@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, F, OrderBy, Prefetch, Q
 from django.db.models.deletion import ProtectedError
@@ -18,6 +19,7 @@ from accounts.permissions import (
     write_required,
 )
 from inventory.forms import ItemForm, LoanForm, PlaceForm, RoomForm
+from inventory.images import process_item_photo
 from inventory.labels import LABEL_SIZE_LIST, LABEL_SIZE_SESSION_KEY, DEFAULT_SIZE_KEY
 from inventory.models import Category, Item, Loan, Location, Project
 from inventory.policy import visible_items
@@ -266,6 +268,31 @@ def still_here(request, pk):
         messages.success(request, "Marked as still here.")
     if hx:
         return render(request, "inventory/partials/still_here_ok.html", {"item": item})
+    return redirect("inventory:item_detail", pk=pk)
+
+
+@write_required
+def item_photo(request, pk):
+    item = get_object_or_404(Item, pk=pk)
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required")
+    uploaded = request.FILES.get("photo")
+    if not uploaded:
+        messages.error(request, "Take or choose a photo first.")
+        return redirect("inventory:item_detail", pk=pk)
+    try:
+        processed = process_item_photo(uploaded)
+    except ValidationError as exc:
+        message = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
+        messages.error(request, message)
+        return redirect("inventory:item_detail", pk=pk)
+    old_name = item.photo.name if item.photo else ""
+    item.photo = processed
+    item.updated_by = request.user
+    item.save(update_fields=["photo", "updated_by", "updated_at"])
+    if old_name and old_name != item.photo.name:
+        item.photo.storage.delete(old_name)
+    messages.success(request, "Photo saved.")
     return redirect("inventory:item_detail", pk=pk)
 
 

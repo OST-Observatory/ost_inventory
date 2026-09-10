@@ -201,6 +201,9 @@ class LabelsUiTests(TestCase):
         self.assertContains(resp, "QR label")
         self.assertContains(resp, "qr-label-dialog")
         self.assertContains(resp, "label-sil-40x30")
+        self.assertContains(resp, "Take photo")
+        self.assertContains(resp, 'capture="environment"')
+        self.assertContains(resp, "js-photo-capture")
         self.assertNotContains(resp, 'href="#loan"')
         preview = self.client.post(
             reverse("inventory:labels"),

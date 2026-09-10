@@ -305,6 +305,29 @@ function bindDialogs() {
   });
 }
 
+function bindPhotoCapture() {
+  document.addEventListener("change", function (event) {
+    var input = event.target.closest(".js-photo-capture input[type='file']");
+    if (!input || !input.files || !input.files.length) {
+      return;
+    }
+    var form = input.form;
+    if (!form) {
+      return;
+    }
+    var message = form.getAttribute("data-confirm");
+    if (message && !window.confirm(message)) {
+      input.value = "";
+      return;
+    }
+    if (form.requestSubmit) {
+      form.requestSubmit();
+    } else {
+      form.submit();
+    }
+  });
+}
+
 function bindUi() {
   bindLabelFilters();
   bindNavDrawer();
@@ -312,6 +335,7 @@ function bindUi() {
   bindSharePng();
   bindStocktakeCamera();
   bindDialogs();
+  bindPhotoCapture();
 }
 
 if (document.readyState === "loading") {

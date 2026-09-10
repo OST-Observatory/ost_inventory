@@ -3,6 +3,7 @@ from io import BytesIO
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
 from PIL import Image
@@ -121,6 +122,48 @@ class InventoryFlowTests(TestCase):
         self.client.login(username="reader", password="x")
         resp = self.client.get(reverse("inventory:item_create"))
         self.assertEqual(resp.status_code, 403)
+
+    def test_take_photo_from_detail(self):
+        from tempfile import TemporaryDirectory
+
+        from django.test import override_settings
+
+        item = Item.objects.create(
+            name="Camera body",
+            location=self.loc,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.login(username="reader", password="x")
+        detail = self.client.get(reverse("inventory:item_detail", args=[item.pk]))
+        self.assertNotContains(detail, "Take photo")
+        buf = BytesIO()
+        Image.new("RGB", (12, 12), "red").save(buf, format="JPEG")
+        photo = SimpleUploadedFile("cam.jpg", buf.getvalue(), content_type="image/jpeg")
+        denied = self.client.post(
+            reverse("inventory:item_photo", args=[item.pk]),
+            {"photo": photo},
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        self.client.login(username="writer", password="x")
+        detail = self.client.get(reverse("inventory:item_detail", args=[item.pk]))
+        self.assertContains(detail, "Take photo")
+        self.assertContains(detail, 'capture="environment"')
+        buf = BytesIO()
+        Image.new("RGB", (12, 12), "blue").save(buf, format="JPEG")
+        photo = SimpleUploadedFile("cam.jpg", buf.getvalue(), content_type="image/jpeg")
+        with TemporaryDirectory() as tmp:
+            with override_settings(MEDIA_ROOT=tmp):
+                resp = self.client.post(
+                    reverse("inventory:item_photo", args=[item.pk]),
+                    {"photo": photo},
+                )
+                self.assertEqual(resp.status_code, 302)
+                item.refresh_from_db()
+                self.assertTrue(item.photo)
+                replaced = self.client.get(reverse("inventory:item_detail", args=[item.pk]))
+                self.assertContains(replaced, "Replace photo")
 
     def test_search_requires_role(self):
         outsider = User.objects.create_user(username="x", password="x")
