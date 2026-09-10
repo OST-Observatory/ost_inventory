@@ -103,7 +103,7 @@ function bindNavDrawer() {
   if (!drawer) {
     return;
   }
-  var desktop = window.matchMedia("(min-width: 45rem)");
+  var desktop = window.matchMedia("(min-width: 850px)");
   function syncDrawer(isDesktop) {
     if (isDesktop) {
       drawer.setAttribute("open", "");

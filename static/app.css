@@ -273,13 +273,13 @@ h2 { margin-top: 0; }
   margin-left: 0;
 }
 
-@media (min-width: 45rem) {
+@media (min-width: 850px) {
   .site-nav .nav-drawer > .nav-links {
     display: flex !important;
   }
 }
 
-@media (max-width: 44.99rem) {
+@media (max-width: 849.98px) {
   .site-nav .nav-drawer {
     position: static;
   }
