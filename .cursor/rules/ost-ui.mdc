@@ -1,0 +1,30 @@
+---
+description: OST Inventory page layout — cards, English UI, no inline CSS
+globs: templates/**/*.html,static/app.css
+alwaysApply: false
+---
+
+# OST UI
+
+Visual system lives in `static/app.css` (`:root` tokens + Pico overrides). Do not add inline `style=""` (CSP `style-src 'self'`). UI copy is English.
+
+Every page extends `base.html`. `main.container.page` already styles the title (`h1` + following `p.muted`).
+
+Wrap content in existing primitives — do not invent new layout classes:
+
+- **`.block-card`** — section (filters, tables, scan, admin). Alias: `.form-section` on item create/edit.
+- **`.toolbar`** / `.actions-row` / `.action-bar` — buttons and search, `width: auto`.
+- **`.empty-state`** — no rows. Do not nest inside `.block-card`.
+- **`.chip`**, **`.inv-badge`**, **`.add-inline`**, **`.muted`**
+
+```html
+{% extends "base.html" %}
+{% block content %}
+<h1>Page title</h1>
+<p class="muted">One-line purpose.</p>
+<section class="block-card">
+  <h2>Section</h2>
+  <table>…</table>
+</section>
+{% endblock %}
+```

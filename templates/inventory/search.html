@@ -2,63 +2,65 @@
 {% block title %}Search — OST Inventory{% endblock %}
 {% block content %}
 <h1>Search</h1>
-<form
-  id="search-form"
-  method="get"
-  hx-get="{% url 'inventory:search' %}"
-  hx-target="#results"
-  hx-trigger="keyup changed delay:300ms from:#q, change"
-  hx-push-url="true"
->
-  <input id="q" type="search" name="q" value="{{ q }}" placeholder="Search name, description, comment, category, project, container…" autofocus>
-  <div class="filters">
-    <label>
-      Category
-      <select name="category">
-        <option value="">All</option>
-        {% for c in categories %}
-          <option value="{{ c.pk }}" {% if selected_category == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      Location
-      <select name="location">
-        <option value="">All</option>
-        {% for loc in locations %}
-          <option value="{{ loc.pk }}" {% if selected_location == loc.pk|stringformat:"s" %}selected{% endif %}>{{ loc.path_display }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      Project
-      <select name="project">
-        <option value="">All</option>
-        {% for p in projects %}
-          <option value="{{ p.pk }}" {% if selected_project == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      Container
-      <select name="container">
-        <option value="">All</option>
-        {% for c in containers %}
-          <option value="{{ c }}" {% if selected_container == c %}selected{% endif %}>{{ c }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label class="checkbox">
-      <input type="checkbox" name="on_loan" value="1" {% if on_loan %}checked{% endif %}>
-      On loan only
-    </label>
-  </div>
-  <p class="actions-row">
-    <button type="submit">Search</button>
-    <a class="secondary" href="{% url 'inventory:export_csv' %}?{{ request.GET.urlencode }}"
-       title="Spreadsheet formulas in exported cells are neutralized.">Export CSV</a>
-  </p>
-</form>
+<section class="block-card">
+  <form
+    id="search-form"
+    method="get"
+    hx-get="{% url 'inventory:search' %}"
+    hx-target="#results"
+    hx-trigger="keyup changed delay:300ms from:#q, change"
+    hx-push-url="true"
+  >
+    <input id="q" type="search" name="q" value="{{ q }}" placeholder="Search name, description, comment, category, project, container…" autofocus>
+    <div class="filters">
+      <label>
+        Category
+        <select name="category">
+          <option value="">All</option>
+          {% for c in categories %}
+            <option value="{{ c.pk }}" {% if selected_category == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        Location
+        <select name="location">
+          <option value="">All</option>
+          {% for loc in locations %}
+            <option value="{{ loc.pk }}" {% if selected_location == loc.pk|stringformat:"s" %}selected{% endif %}>{{ loc.path_display }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        Project
+        <select name="project">
+          <option value="">All</option>
+          {% for p in projects %}
+            <option value="{{ p.pk }}" {% if selected_project == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        Container
+        <select name="container">
+          <option value="">All</option>
+          {% for c in containers %}
+            <option value="{{ c }}" {% if selected_container == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" name="on_loan" value="1" {% if on_loan %}checked{% endif %}>
+        On loan only
+      </label>
+    </div>
+    <p class="actions-row">
+      <button type="submit">Search</button>
+      <a role="button" class="secondary outline" href="{% url 'inventory:export_csv' %}?{{ request.GET.urlencode }}"
+         title="Spreadsheet formulas in exported cells are neutralized.">Export CSV</a>
+    </p>
+  </form>
+</section>
 
 <div id="results">
   {% include "inventory/partials/search_results.html" %}

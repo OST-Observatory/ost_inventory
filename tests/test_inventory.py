@@ -1,4 +1,6 @@
+import re
 from io import BytesIO
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
@@ -6,7 +8,13 @@ from django.urls import reverse
 from PIL import Image
 
 from accounts.permissions import user_can_admin, user_can_read, user_can_write
-from inventory.labels import LABEL_SIZES, render_label_png
+from inventory.labels import (
+    CABLE_FLAG_MM,
+    CABLE_TAB_MM,
+    LABEL_SIZES,
+    render_label_png,
+    sil_rem,
+)
 from inventory.models import Category, Item, Loan, Location, Project, StocktakeScan
 
 User = get_user_model()
@@ -354,6 +362,53 @@ class InventoryFlowTests(TestCase):
 
 
 class LabelPngTests(TestCase):
+    def test_silhouette_keeps_mm_aspect_ratio(self):
+        scale = None
+        boxes = {}
+        for size in LABEL_SIZES.values():
+            if size.layout == "cable":
+                continue
+            style = size.sil_box_style
+            w = float(style.split("width:")[1].split("rem")[0])
+            h = float(style.split("height:")[1].split("rem")[0])
+            boxes[size.key] = (w, h)
+            self.assertAlmostEqual(w / h, size.width_mm / size.height_mm, places=3)
+            if scale is None:
+                scale = w / size.width_mm
+            else:
+                self.assertAlmostEqual(w / size.width_mm, scale, places=3, msg=size.key)
+        large_w, large_h = boxes["50x80"]
+        med_w, med_h = boxes["40x30"]
+        self.assertGreater(large_w, med_w)
+        self.assertGreater(large_h, med_h)
+        self.assertGreater(boxes["40x30"][1], boxes["40x20"][1])
+        self.assertGreater(boxes["40x20"][0], boxes["30x20"][0])
+
+    def test_silhouette_css_classes_match_box_style(self):
+        css = Path("static/app.css").read_text()
+
+        def css_box(selector: str) -> tuple[float, float]:
+            match = re.search(
+                rf"(?m)^{re.escape(selector)} \{{[^}}]*width:\s*([\d.]+)rem;[^}}]*height:\s*([\d.]+)rem;",
+                css,
+            )
+            self.assertIsNotNone(match, selector)
+            return float(match.group(1)), float(match.group(2))
+
+        for size in LABEL_SIZES.values():
+            if size.layout == "cable":
+                continue
+            w, h = css_box(f".label-sil-{size.key}")
+            sw = float(size.sil_box_style.split("width:")[1].split("rem")[0])
+            sh = float(size.sil_box_style.split("height:")[1].split("rem")[0])
+            self.assertAlmostEqual(w, sw, places=3, msg=size.key)
+            self.assertAlmostEqual(h, sh, places=3, msg=size.key)
+        for name, mm in (("flag", CABLE_FLAG_MM), ("tab", CABLE_TAB_MM)):
+            w, h = css_box(f".label-sil-{name}")
+            sw, sh = sil_rem(*mm)
+            self.assertAlmostEqual(w, sw, places=3, msg=name)
+            self.assertAlmostEqual(h, sh, places=3, msg=name)
+
     def test_all_presets_match_pixel_size(self):
         for size in LABEL_SIZES.values():
             png = render_label_png(

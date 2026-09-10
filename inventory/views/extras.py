@@ -238,6 +238,21 @@ def labels_png(request):
     return response
 
 
+def _csv_text_from_request(request) -> str:
+    max_bytes = getattr(settings, "CSV_IMPORT_MAX_BYTES", 2 * 1024 * 1024)
+    upload = request.FILES.get("file")
+    if upload:
+        if upload.size is not None and upload.size > max_bytes:
+            raise ValueError("CSV file is too large (max 2 MB).")
+        return upload.read().decode("utf-8-sig")
+    posted = request.POST.get("csv_text")
+    if posted:
+        if len(posted.encode("utf-8")) > max_bytes:
+            raise ValueError("CSV file is too large (max 2 MB).")
+        return posted
+    raise ValueError("Please choose a CSV file.")
+
+
 @import_required
 @require_http_methods(["GET", "POST"])
 def csv_import_preview(request):
@@ -247,31 +262,28 @@ def csv_import_preview(request):
     if request.method == "GET":
         return render(request, "inventory/csv_import.html")
 
-    upload = request.FILES.get("file")
-    if not upload:
-        messages.error(request, "Please choose a CSV file.")
-        return redirect("inventory:csv_import")
-
-    max_bytes = getattr(settings, "CSV_IMPORT_MAX_BYTES", 2 * 1024 * 1024)
-    if upload.size is not None and upload.size > max_bytes:
-        messages.error(request, "CSV file is too large (max 2 MB).")
-        return redirect("inventory:csv_import")
-
-    dry_run = request.POST.get("confirm") != "1"
     try:
-        text = upload.read().decode("utf-8-sig")
+        text = _csv_text_from_request(request)
         rows = parse_csv(io.StringIO(text))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("inventory:csv_import")
     except (CommandError, UnicodeDecodeError) as exc:
         messages.error(request, str(exc))
         return redirect("inventory:csv_import")
+
+    dry_run = request.POST.get("confirm") != "1"
     result = import_rows(rows, user=request.user, dry_run=dry_run)
     if dry_run:
+        preview_rows = result["preview"]
         return render(
             request,
             "inventory/csv_import.html",
             {
                 "preview": result,
                 "csv_text": text,
+                "create_count": sum(1 for row in preview_rows if row["action"] == "create"),
+                "update_count": sum(1 for row in preview_rows if row["action"] == "update"),
             },
         )
     messages.success(

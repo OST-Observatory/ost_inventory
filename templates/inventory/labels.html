@@ -22,7 +22,7 @@
             <span class="label-sil-flag"></span>
             <span class="label-sil-tab"></span>
           {% else %}
-            <span class="label-sil-body" style="--lw: {{ size.width_mm }}; --lh: {{ size.height_mm }};"></span>
+            <span class="label-sil-body label-sil-{{ size.key }}"></span>
           {% endif %}
         </span>
         <strong>{{ size.name }}</strong>

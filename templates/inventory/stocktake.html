@@ -28,21 +28,23 @@
 {% endif %}
 
 {% if recent %}
-<h2>Recent</h2>
-<table>
-  <thead>
-    <tr><th>Started</th><th>Scope</th><th>Status</th><th></th></tr>
-  </thead>
-  <tbody>
-    {% for s in recent %}
-    <tr>
-      <td>{{ s.started_at|naturaltime }}</td>
-      <td>{% if s.scope_location %}{{ s.scope_location.name }}{% else %}Whole inventory{% endif %}</td>
-      <td>{% if s.is_open %}Open{% else %}Finished{% endif %}</td>
-      <td class="col-actions"><a href="{% url 'inventory:stocktake_detail' s.pk %}">Open</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<section class="block-card">
+  <h2>Recent</h2>
+  <table>
+    <thead>
+      <tr><th>Started</th><th>Scope</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in recent %}
+      <tr>
+        <td>{{ s.started_at|naturaltime }}</td>
+        <td>{% if s.scope_location %}{{ s.scope_location.name }}{% else %}Whole inventory{% endif %}</td>
+        <td>{% if s.is_open %}<span class="chip chip-available">Open</span>{% else %}Finished{% endif %}</td>
+        <td class="col-actions"><a href="{% url 'inventory:stocktake_detail' s.pk %}">Open</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
 {% endif %}
 {% endblock %}

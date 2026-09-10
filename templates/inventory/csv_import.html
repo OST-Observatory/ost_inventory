@@ -2,50 +2,134 @@
 {% block title %}CSV import{% endblock %}
 {% block content %}
 <h1>CSV import</h1>
-<p>Required columns: <code>name</code>, <code>location_path</code> (<code>PRA/2a</code> = room/place).
-Optional: <code>description</code>, <code>quantity</code>, <code>quantity_approximate</code> (yes/true/1),
-<code>container</code>, <code>categories</code> (semicolon-separated, 1–4; <code>item_type</code> is merged in if present),
-<code>project</code>, <code>comment</code>. Maximum 2&nbsp;MB / 2000 rows.</p>
+<p class="muted">Preview the file first, then confirm to write. UTF-8 CSV, maximum 2&nbsp;MB / 2000 rows.</p>
 
-{% if preview %}
-  <article>
-    <h2>Preview {% if preview.errors %}(with errors){% endif %}</h2>
-    <p>{{ preview.preview|length }} rows — {{ preview.errors|length }} errors</p>
-    {% if preview.errors %}
-    <ul>
-      {% for err in preview.errors %}
-        <li>Line {{ err.line }}: {{ err.error }}</li>
-      {% endfor %}
-    </ul>
-    {% endif %}
-    <table>
-      <thead><tr><th>Line</th><th>Action</th><th>Name</th><th>Location</th></tr></thead>
-      <tbody>
-        {% for row in preview.preview|slice:":30" %}
-        <tr>
-          <td>{{ row.line }}</td>
-          <td>{{ row.action }}</td>
-          <td>{{ row.name }}</td>
-          <td>{{ row.location }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% if not preview.errors %}
-    <form method="post" enctype="multipart/form-data">
-      {% csrf_token %}
-      <input type="hidden" name="confirm" value="1">
-      <p>Re-upload the same file to confirm:</p>
-      <input type="file" name="file" accept=".csv,text/csv" required>
-      <button type="submit">Confirm import</button>
-    </form>
-    {% endif %}
-  </article>
-{% endif %}
-
-<form method="post" enctype="multipart/form-data">
+<form method="post" enctype="multipart/form-data" class="add-inline import-upload">
   {% csrf_token %}
-  <label>CSV file <input type="file" name="file" accept=".csv,text/csv" required></label>
+  <label>
+    <span>CSV file</span>
+    <input type="file" name="file" accept=".csv,text/csv" required>
+  </label>
   <button type="submit">Preview import</button>
 </form>
+
+{% if preview %}
+<section class="block-card">
+  <header class="import-head">
+    <div>
+      <h2>Preview</h2>
+      <p class="muted">
+        {{ preview.preview|length }} row{{ preview.preview|length|pluralize }}
+        {% if preview.preview|length > 30 %} (first 30 shown){% endif %}
+      </p>
+    </div>
+    <p class="import-counts">
+      {% if create_count %}<span class="chip chip-available">{{ create_count }} create</span>{% endif %}
+      {% if update_count %}<span class="chip chip-loaned">{{ update_count }} update</span>{% endif %}
+      {% if preview.errors %}<span class="chip chip-overdue">{{ preview.errors|length }} error{{ preview.errors|length|pluralize }}</span>{% endif %}
+    </p>
+  </header>
+
+  {% if preview.errors %}
+  <table>
+    <thead><tr><th>Line</th><th>Error</th></tr></thead>
+    <tbody>
+      {% for err in preview.errors %}
+      <tr class="overdue-row">
+        <td>{{ err.line }}</td>
+        <td>{{ err.error }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">Fix the file and preview again. Nothing has been written.</p>
+  {% endif %}
+
+  {% if preview.preview %}
+  <table>
+    <thead><tr><th>Line</th><th>Action</th><th>Name</th><th>Location</th></tr></thead>
+    <tbody>
+      {% for row in preview.preview|slice:":30" %}
+      <tr>
+        <td>{{ row.line }}</td>
+        <td>
+          {% if row.action == "create" %}
+            <span class="chip chip-available">Create</span>
+          {% else %}
+            <span class="chip chip-loaned">Update</span>
+          {% endif %}
+        </td>
+        <td>{{ row.name }}</td>
+        <td>{{ row.location }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if preview.preview and not preview.errors %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="confirm" value="1">
+    <textarea name="csv_text" hidden>{{ csv_text }}</textarea>
+    <p class="actions-row">
+      <button type="submit">Confirm import</button>
+      <a href="{% url 'inventory:csv_import' %}" role="button" class="secondary outline">Start over</a>
+    </p>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="block-card">
+  <h2>Columns</h2>
+  <table class="import-columns">
+    <tbody>
+      <tr class="import-col-group"><th colspan="2">Required</th></tr>
+      <tr>
+        <th scope="row"><code>name</code></th>
+        <td>Item name</td>
+      </tr>
+      <tr>
+        <th scope="row"><code>location_path</code></th>
+        <td>Room/place, e.g. PRA/2a</td>
+      </tr>
+    </tbody>
+    <tbody>
+      <tr class="import-col-group"><th colspan="2">Optional</th></tr>
+      <tr>
+        <th scope="row"><code>description</code></th>
+        <td></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>quantity</code></th>
+        <td>Defaults to 1</td>
+      </tr>
+      <tr>
+        <th scope="row"><code>quantity_approximate</code></th>
+        <td>yes / true / 1</td>
+      </tr>
+      <tr>
+        <th scope="row"><code>container</code></th>
+        <td></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>categories</code></th>
+        <td>Semicolon-separated, max 4</td>
+      </tr>
+      <tr>
+        <th scope="row"><code>project</code></th>
+        <td></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>comment</code></th>
+        <td></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>item_type</code></th>
+        <td>Legacy; merged into categories</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
 {% endblock %}

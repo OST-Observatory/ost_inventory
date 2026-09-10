@@ -5,34 +5,35 @@
 <p class="muted">Short URL: /l/{{ location.pk }}/</p>
 {% if location.is_room %}
   {% if children %}
-    <h2>Places in this room</h2>
-    <ul>
-      {% for child in children %}
-        <li><a href="{% url 'inventory:location_detail' child.pk %}">{{ child.name }}</a></li>
-      {% endfor %}
-    </ul>
+    <section class="block-card">
+      <h2>Places in this room</h2>
+      <ul>
+        {% for child in children %}
+          <li><a href="{% url 'inventory:location_detail' child.pk %}">{{ child.name }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
   {% endif %}
 {% elif location.parent %}
-  <p>Room: <a href="{% url 'inventory:location_detail' location.parent_id %}">{{ location.parent.name }}</a></p>
+  <p class="muted">Room: <a href="{% url 'inventory:location_detail' location.parent_id %}">{{ location.parent.name }}</a></p>
 {% endif %}
-<h2>Items here{% if location.is_room %} (incl. places){% endif %}</h2>
-{% if items %}
-<table>
-  <thead><tr><th>#</th><th>Name</th><th>Location</th></tr></thead>
-  <tbody>
-    {% for item in items %}
-    <tr>
-      <td><a href="{% url 'inventory:item_detail' item.pk %}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
-      <td><a href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a></td>
-      <td>{{ item.location.path_display }}{% if item.container %} · {{ item.container }}{% endif %}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<div class="empty-state">
-  <p>No items at this location.</p>
-  <p class="muted"><a href="{% url 'inventory:search' %}">Search inventory</a></p>
-</div>
-{% endif %}
+<section class="block-card">
+  <h2>Items here{% if location.is_room %} (incl. places){% endif %}</h2>
+  {% if items %}
+  <table>
+    <thead><tr><th>#</th><th>Name</th><th>Location</th></tr></thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td><a href="{% url 'inventory:item_detail' item.pk }}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
+        <td><a href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a></td>
+        <td>{{ item.location.path_display }}{% if item.container %} · {{ item.container }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No items at this location. <a href="{% url 'inventory:search' %}">Search inventory</a></p>
+  {% endif %}
+</section>
 {% endblock %}

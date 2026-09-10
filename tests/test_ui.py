@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -74,6 +75,29 @@ class UiNavTests(TestCase):
         self.assertContains(resp, "nav-hamburger")
         self.assertContains(resp, "Menu")
 
+    def test_list_pages_use_block_cards(self):
+        self.client.login(username="writer", password="x")
+        writer_pages = (
+            "inventory:search",
+            "inventory:current_loans",
+            "inventory:not_seen",
+            "inventory:loan_history",
+            "inventory:locations",
+            "inventory:stocktake",
+            "inventory:csv_import",
+        )
+        for name in writer_pages:
+            resp = self.client.get(reverse(name))
+            self.assertEqual(resp.status_code, 200, name)
+            self.assertContains(resp, "block-card", msg_prefix=name)
+            self.assertContains(resp, 'class="container page"', msg_prefix=name)
+        User.objects.create_user(username="aclstaff", password="x", is_staff=True)
+        self.client.login(username="aclstaff", password="x")
+        for name in ("accounts:access", "accounts:groups"):
+            resp = self.client.get(reverse(name))
+            self.assertEqual(resp.status_code, 200, name)
+            self.assertContains(resp, "block-card", msg_prefix=name)
+
 
 class SearchChipTests(TestCase):
     def setUp(self):
@@ -134,6 +158,11 @@ class LabelsUiTests(TestCase):
         self.assertContains(resp, "label-sil")
         self.assertContains(resp, "label-sil-flag")
         self.assertContains(resp, "label-sil-body")
+        self.assertContains(resp, "label-sil-50x80")
+        self.assertContains(resp, "label-sil-40x30")
+        self.assertContains(resp, "label-sil-40x20")
+        self.assertContains(resp, "label-sil-30x20")
+        self.assertNotContains(resp, 'style="width:')
 
     def test_generate_preview_and_png(self):
         resp = self.client.post(
@@ -163,6 +192,40 @@ class LabelsUiTests(TestCase):
         self.assertTrue(ods.content.startswith(b"PK"))
         self.assertIn(b"content.xml", ods.content)
 
+
+class CsvImportPageTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="writer", password="x", is_supervisor=True
+        )
+        self.client = Client()
+        self.client.login(username="writer", password="x")
+
+    def test_import_page_layout(self):
+        resp = self.client.get(reverse("inventory:csv_import"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "add-inline")
+        self.assertContains(resp, "import-columns")
+        self.assertContains(resp, "Preview import")
+        self.assertContains(resp, "location_path")
+
+    def test_preview_and_confirm_without_reupload(self):
+        csv_body = b"name,location_path\nScope,Lab\n"
+        resp = self.client.post(
+            reverse("inventory:csv_import"),
+            {"file": SimpleUploadedFile("items.csv", csv_body, content_type="text/csv")},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "chip-available")
+        self.assertContains(resp, "Confirm import")
+        self.assertContains(resp, 'name="csv_text"')
+        self.assertFalse(Item.objects.filter(name="Scope").exists())
+        confirm = self.client.post(
+            reverse("inventory:csv_import"),
+            {"confirm": "1", "csv_text": csv_body.decode()},
+        )
+        self.assertEqual(confirm.status_code, 302)
+        self.assertTrue(Item.objects.filter(name="Scope").exists())
 
 
 class RelativeDueTests(TestCase):

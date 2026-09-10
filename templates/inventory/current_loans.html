@@ -3,47 +3,50 @@
 {% block title %}Currently on loan{% endblock %}
 {% block content %}
 <h1>Currently on loan</h1>
+<p class="muted">Open loans, overdue first. Return an item from this list or from its detail page.</p>
 {% if loans %}
-<table>
-  <thead>
-    <tr>
-      <th>Due</th>
-      <th>Item</th>
-      {% if can_see_loan_pii %}
-      <th>Borrower</th>
-      <th>Contact</th>
-      {% endif %}
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for loan in loans %}
-    <tr class="{% if loan.is_overdue %}overdue-row{% endif %}">
-      <td>
-        <span class="{% if loan.is_overdue %}chip chip-overdue{% else %}chip chip-loaned{% endif %}">{{ loan.due_date|relative_due }}</span>
-        <div class="muted">{{ loan.due_date }}</div>
-      </td>
-      <td>
-        <a href="{% url 'inventory:item_detail' loan.item_id %}">
-          <span class="inv-badge">{{ loan.item.inventory_number }}</span> {{ loan.item.name }}
-        </a>
-      </td>
-      {% if can_see_loan_pii %}
-      <td>{{ loan.borrower_name }}</td>
-      <td>{{ loan.borrower_contact }}</td>
-      {% endif %}
-      <td>
-        {% if can_write %}
-        <form method="post" action="{% url 'inventory:loan_return' loan.pk %}" class="inline">
-          {% csrf_token %}
-          <button type="submit" class="outline">Return</button>
-        </form>
+<section class="block-card">
+  <table>
+    <thead>
+      <tr>
+        <th>Due</th>
+        <th>Item</th>
+        {% if can_see_loan_pii %}
+        <th>Borrower</th>
+        <th>Contact</th>
         {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for loan in loans %}
+      <tr class="{% if loan.is_overdue %}overdue-row{% endif %}">
+        <td>
+          <span class="{% if loan.is_overdue %}chip chip-overdue{% else %}chip chip-loaned{% endif %}">{{ loan.due_date|relative_due }}</span>
+          <div class="muted">{{ loan.due_date }}</div>
+        </td>
+        <td>
+          <a href="{% url 'inventory:item_detail' loan.item_id %}">
+            <span class="inv-badge">{{ loan.item.inventory_number }}</span> {{ loan.item.name }}
+          </a>
+        </td>
+        {% if can_see_loan_pii %}
+        <td>{{ loan.borrower_name }}</td>
+        <td>{{ loan.borrower_contact }}</td>
+        {% endif %}
+        <td class="col-actions">
+          {% if can_write %}
+          <form method="post" action="{% url 'inventory:loan_return' loan.pk %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="outline secondary">Return</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
 {% else %}
 <div class="empty-state">
   <p>Nothing currently on loan.</p>

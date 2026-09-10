@@ -5,7 +5,7 @@
 <p class="muted">Permissions are granted to <strong>groups</strong>. A user receives every permission from every group they belong to.
 LDAP login still maps institute roles onto <code>student</code>, <code>supervisor</code>, and <code>staff</code>. Superusers always have every permission.</p>
 
-<form method="post" action="{% url 'accounts:access_save' %}">
+<form method="post" action="{% url 'accounts:access_save' %}" class="block-card">
   {% csrf_token %}
   <div class="acl-table-wrap">
     <table class="acl-table">

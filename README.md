@@ -56,8 +56,8 @@ python manage.py test
 ```
 
 CSV columns: `name`, `location_path` (required; `PRA/2a` = room/place); optional `description`, `quantity`,
-`quantity_approximate` (`yes`/`true`/`1`), `container`, `categories` (semicolon-separated, max 4;
-legacy `item_type` is merged into categories), `project`, `comment`.
+`quantity_approximate` (`yes`/`true`/`1`), `container`, `categories` (semicolon-separated, max 4), 
+`project`, `comment`.
 Limits: 2 MB, 2000 rows, 500 characters/field, location depth 2.
 
 ## Stable QR URLs

@@ -13,39 +13,41 @@
 {% endif %}
 
 {% if groups %}
-<table>
-  <thead>
-    <tr>
-      <th>Group</th>
-      <th>Members</th>
-      <th class="col-actions"></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for group in groups %}
-    <tr>
-      <td><a href="{% url 'accounts:group_detail' group.pk %}">{{ group.name }}</a></td>
-      <td>{{ group.member_count }}</td>
-      <td class="col-actions">
-        {% if group.name not in protected_names %}
-        <form method="post" action="{% url 'accounts:group_delete' group.pk %}" class="inline js-confirm"
-              data-confirm="Delete group {{ group.name }}?">
-          {% csrf_token %}
-          <button type="submit" class="outline secondary">Delete</button>
-        </form>
-        {% else %}
-        <span class="muted">Login role</span>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<section class="block-card">
+  <table>
+    <thead>
+      <tr>
+        <th>Group</th>
+        <th>Members</th>
+        <th class="col-actions"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for group in groups %}
+      <tr>
+        <td><a href="{% url 'accounts:group_detail' group.pk %}">{{ group.name }}</a></td>
+        <td>{{ group.member_count }}</td>
+        <td class="col-actions">
+          {% if group.name not in protected_names %}
+          <form method="post" action="{% url 'accounts:group_delete' group.pk %}" class="inline js-confirm"
+                data-confirm="Delete group {{ group.name }}?">
+            {% csrf_token %}
+            <button type="submit" class="outline secondary">Delete</button>
+          </form>
+          {% else %}
+          <span class="muted">Login role</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
 {% else %}
 <div class="empty-state"><p>No groups yet.</p></div>
 {% endif %}
 
 <p class="actions-row">
-  <a href="{% url 'accounts:access' %}">Access control</a>
+  <a href="{% url 'accounts:access' %}" role="button" class="secondary outline">Access control</a>
 </p>
 {% endblock %}

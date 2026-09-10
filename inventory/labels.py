@@ -41,12 +41,10 @@ class LabelSize:
         return mm_to_px(self.height_mm)
 
     @property
-    def sil_w(self) -> float:
-        return 80 if self.layout == "cable" else self.width_mm
-
-    @property
-    def sil_h(self) -> float:
-        return 30 if self.layout == "cable" else self.height_mm
+    def sil_box_style(self) -> str:
+        """Picker size at the shared mm scale (must match app.css; no inline styles)."""
+        w, h = sil_rem(self.width_mm, self.height_mm)
+        return f"width:{w:.3f}rem;height:{h:.3f}rem;"
 
 
 LABEL_SIZES: dict[str, LabelSize] = {
@@ -93,6 +91,29 @@ LABEL_SIZES: dict[str, LabelSize] = {
 }
 
 LABEL_SIZE_LIST = tuple(LABEL_SIZES.values())
+
+# Picker silhouettes share one mm scale so 50×80 is larger than 40×30, not a thin bar.
+SIL_FIT_W_REM = 5.5
+SIL_FIT_H_REM = 4.0
+CABLE_FLAG_MM = (45.0, 30.0)
+CABLE_TAB_MM = (35.0, 7.0)
+
+
+def silhouette_scale() -> float:
+    max_w = max(
+        CABLE_FLAG_MM[0] + CABLE_TAB_MM[0] if s.layout == "cable" else s.width_mm
+        for s in LABEL_SIZES.values()
+    )
+    max_h = max(
+        CABLE_FLAG_MM[1] if s.layout == "cable" else s.height_mm
+        for s in LABEL_SIZES.values()
+    )
+    return min(SIL_FIT_W_REM / max_w, SIL_FIT_H_REM / max_h)
+
+
+def sil_rem(width_mm: float, height_mm: float) -> tuple[float, float]:
+    scale = silhouette_scale()
+    return width_mm * scale, height_mm * scale
 
 
 def get_label_size(key: str | None) -> LabelSize:
