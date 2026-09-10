@@ -39,16 +39,31 @@ class UiNavTests(TestCase):
         self.assertNotContains(resp, "Add item")
         self.assertNotContains(resp, "Import")
         self.assertNotContains(resp, "Stocktake")
+        self.assertNotContains(resp, "QR labels")
         self.assertContains(resp, "History")
         self.assertContains(resp, "On loan")
+        self.assertContains(resp, "Not seen")
+        self.assertContains(resp, "Tools")
 
     def test_tools_visible_for_writer(self):
         self.client.login(username="writer", password="x")
         resp = self.client.get(reverse("inventory:search"))
+        html = resp.content.decode()
         self.assertContains(resp, "Add item")
         self.assertContains(resp, "QR labels")
         self.assertContains(resp, "Stocktake")
         self.assertContains(resp, "Import")
+        add_pos = html.index("Add item")
+        labels_pos = html.index("QR labels")
+        tools_pos = html.index("Tools")
+        self.assertLess(add_pos, tools_pos)
+        self.assertLess(labels_pos, tools_pos)
+        panel = html[html.index('class="tools-panel"'):]
+        self.assertIn("On loan", panel)
+        self.assertIn("Not seen", panel)
+        self.assertIn("Stocktake", panel)
+        self.assertNotIn("Add item", panel)
+        self.assertNotIn("QR labels", panel)
 
     def test_overdue_badge_count(self):
         self.client.login(username="reader", password="x")
