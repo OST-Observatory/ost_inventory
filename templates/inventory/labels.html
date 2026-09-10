@@ -13,23 +13,7 @@
 
   <section class="block-card label-size-card">
     <h2>Label size</h2>
-    <div class="label-size-grid">
-      {% for size in label_sizes %}
-      <label class="label-size-option">
-        <input type="radio" class="visually-hidden" name="label_size" value="{{ size.key }}" {% if size.key == selected_size %}checked{% endif %}>
-        <span class="label-sil" aria-hidden="true">
-          {% if size.layout == "cable" %}
-            <span class="label-sil-flag"></span>
-            <span class="label-sil-tab"></span>
-          {% else %}
-            <span class="label-sil-body label-sil-{{ size.key }}"></span>
-          {% endif %}
-        </span>
-        <strong>{{ size.name }}</strong>
-        <span class="muted">{{ size.hint }}</span>
-      </label>
-      {% endfor %}
-    </div>
+    {% include "inventory/partials/label_size_picker.html" %}
   </section>
 
   <div class="form-grid">

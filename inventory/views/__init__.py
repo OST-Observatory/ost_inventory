@@ -17,6 +17,7 @@ from accounts.permissions import (
     write_required,
 )
 from inventory.forms import ItemForm, LoanForm, PlaceForm, RoomForm
+from inventory.labels import LABEL_SIZE_LIST, LABEL_SIZE_SESSION_KEY, DEFAULT_SIZE_KEY
 from inventory.models import Category, Item, Loan, Location, Project
 from inventory.policy import visible_items
 from inventory.search import filter_items
@@ -122,6 +123,10 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         ctx["loan_form"] = LoanForm()
         ctx["loans"] = self.object.loans.all()
+        ctx["label_sizes"] = LABEL_SIZE_LIST
+        ctx["selected_size"] = self.request.session.get(
+            LABEL_SIZE_SESSION_KEY, DEFAULT_SIZE_KEY
+        )
         return ctx
 
 

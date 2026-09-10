@@ -5,64 +5,70 @@
 {% block title %}{{ item.inventory_number }} {{ item.name }}{% endblock %}
 {% block content %}
 <div class="block-card">
-  <header>
-    <h1><span class="inv-badge">{{ item.inventory_number }}</span> {{ item.name }}</h1>
-    <p>
+  <header class="item-head">
+    <h1>{{ item.name }}</h1>
+    <p class="item-head-meta">
+      <span class="inv-badge">{{ item.inventory_number }}</span>
       {% if item.is_lent %}<span class="chip chip-loaned">On loan</span>{% endif %}
       {% if not item.is_active %}<span class="chip chip-inactive">Inactive</span>{% endif %}
       {% if item.is_active and not item.is_lent %}<span class="chip chip-available">Available</span>{% endif %}
     </p>
   </header>
 
-  {% if can_write %}
+  {% if can_write or can_labels %}
   <div class="action-bar">
+    {% if can_write %}
     <form method="post" action="{% url 'inventory:still_here' item.pk %}" class="inline"
           hx-post="{% url 'inventory:still_here' item.pk %}"
           hx-target="#last-seen"
           hx-select="#last-seen"
           hx-swap="outerHTML">
       {% csrf_token %}
-      <button type="submit" class="primary-action">Still here</button>
+      <button type="submit">Still here</button>
     </form>
+    {% endif %}
+    {% if can_labels and item.is_active %}
+    <button type="button" data-dialog-open="qr-label-dialog">QR label</button>
+    {% endif %}
+    {% if can_write %}
     {% if item.is_lent %}
       {% with loan=item.current_loan %}
       <form method="post" action="{% url 'inventory:loan_return' loan.pk %}" class="inline">
         {% csrf_token %}
-        <button type="submit" class="secondary">Return</button>
+        <button type="submit">Return</button>
       </form>
       {% endwith %}
-    {% elif item.is_active %}
-      <a href="#loan" role="button" class="secondary">Record loan</a>
     {% endif %}
-    <a href="{% url 'inventory:item_edit' item.pk %}" role="button" class="secondary outline">Edit</a>
+    <a href="{% url 'inventory:item_edit' item.pk %}" role="button">Edit</a>
     {% if item.is_active %}
       <form method="post" action="{% url 'inventory:item_deactivate' item.pk %}" class="inline js-confirm"
             data-confirm="Deactivate this item?">
         {% csrf_token %}
-        <button type="submit" class="outline secondary">Deactivate</button>
+        <button type="submit">Deactivate</button>
       </form>
     {% else %}
       <form method="post" action="{% url 'inventory:item_reactivate' item.pk %}" class="inline">
         {% csrf_token %}
-        <button type="submit" class="secondary">Reactivate</button>
+        <button type="submit">Reactivate</button>
       </form>
     {% endif %}
     {% if can_delete %}
       <form method="post" action="{% url 'inventory:item_delete' item.pk %}" class="inline js-confirm"
             data-confirm="Permanently delete? This cannot be undone.">
         {% csrf_token %}
-        <button type="submit" class="outline contrast">Delete</button>
+        <button type="submit">Delete</button>
       </form>
+    {% endif %}
     {% endif %}
   </div>
   {% endif %}
 
-  <div class="detail-grid">
+  <div class="detail-grid{% if item.photo %} detail-grid-photo{% endif %}">
+    {% if item.photo %}
     <div>
-      {% if item.photo %}
-        <img class="detail-photo" src="{% thumbnail item.photo "detail" %}" alt="{{ item.name }}">
-      {% endif %}
+      <img class="detail-photo" src="{% thumbnail item.photo "detail" %}" alt="{{ item.name }}">
     </div>
+    {% endif %}
     <div>
       <dl>
         <dt>Location</dt>
@@ -99,9 +105,11 @@
         <span class="muted">({{ loan.due_date }})</span>
       </p>
       {% if can_write %}
-      <form method="post" action="{% url 'inventory:loan_return' loan.pk %}">
+      <form method="post" action="{% url 'inventory:loan_return' loan.pk %}" class="inline">
         {% csrf_token %}
-        <button type="submit">Return</button>
+        <p class="actions-row">
+          <button type="submit" class="ost-btn">Return</button>
+        </p>
       </form>
       {% endif %}
     {% endwith %}
@@ -115,7 +123,9 @@
         <label>Due {{ loan_form.due_date }}{{ loan_form.due_date.errors }}</label>
         <label>Note {{ loan_form.note }}{{ loan_form.note.errors }}</label>
       </div>
-      <button type="submit">Record loan</button>
+      <p class="actions-row">
+        <button type="submit" class="ost-btn">Record loan</button>
+      </p>
     </form>
   {% endif %}
 </div>
@@ -153,4 +163,20 @@
   <p class="muted">No loans yet.</p>
   {% endif %}
 </div>
+
+{% if can_labels and item.is_active %}
+<dialog id="qr-label-dialog" class="ost-dialog">
+  <form method="post" action="{% url 'inventory:labels' %}">
+    {% csrf_token %}
+    <input type="hidden" name="items" value="{{ item.pk }}">
+    <h2>QR label</h2>
+    <p class="muted">Choose a tape size, then generate a PNG for the Katasymbol app.</p>
+    {% include "inventory/partials/label_size_picker.html" %}
+    <p class="actions-row">
+      <button type="submit">Generate</button>
+      <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
+    </p>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}

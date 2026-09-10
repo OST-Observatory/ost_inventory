@@ -196,6 +196,20 @@ class LabelsUiTests(TestCase):
         self.assertEqual(png["Content-Type"], "image/png")
         self.assertTrue(png.content.startswith(b"\x89PNG"))
 
+    def test_item_detail_qr_dialog(self):
+        resp = self.client.get(reverse("inventory:item_detail", args=[self.item.pk]))
+        self.assertContains(resp, "QR label")
+        self.assertContains(resp, "qr-label-dialog")
+        self.assertContains(resp, "label-sil-40x30")
+        self.assertNotContains(resp, 'href="#loan"')
+        preview = self.client.post(
+            reverse("inventory:labels"),
+            {"items": [str(self.item.pk)], "label_size": "40x30"},
+        )
+        self.assertEqual(preview.status_code, 200)
+        self.assertContains(preview, "data:image/png;base64,")
+        self.assertContains(preview, self.item.name)
+
     def test_zip_and_ods(self):
         data = {"items": [str(self.item.pk)], "label_size": "50x80"}
         zresp = self.client.post(reverse("inventory:labels_zip"), data)

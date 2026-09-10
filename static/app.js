@@ -278,12 +278,40 @@ function bindStocktakeCamera() {
   }
 }
 
+function bindDialogs() {
+  document.addEventListener("click", function (event) {
+    var openBtn = event.target.closest("[data-dialog-open]");
+    if (openBtn) {
+      var dialog = document.getElementById(openBtn.getAttribute("data-dialog-open"));
+      if (dialog && dialog.showModal) {
+        dialog.showModal();
+      }
+      return;
+    }
+    var closeBtn = event.target.closest("[data-dialog-close]");
+    if (closeBtn) {
+      var dialog = closeBtn.closest("dialog");
+      if (dialog) {
+        dialog.close();
+      }
+    }
+  });
+  document.querySelectorAll("dialog.ost-dialog").forEach(function (dialog) {
+    dialog.addEventListener("click", function (event) {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+  });
+}
+
 function bindUi() {
   bindLabelFilters();
   bindNavDrawer();
   bindRoomPlaceSelects();
   bindSharePng();
   bindStocktakeCamera();
+  bindDialogs();
 }
 
 if (document.readyState === "loading") {

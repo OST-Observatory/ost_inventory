@@ -394,10 +394,34 @@ h2 { margin-top: 0; }
   align-items: center;
 }
 .action-bar { margin: 0.75rem 0 1rem; }
-.action-bar .primary-action { margin-right: 0.25rem; }
+.action-bar .inline { margin: 0; }
+.ost-btn,
+.action-bar :is(button, a[role="button"]) {
+  width: auto;
+  height: auto;
+  min-height: 2.15rem;
+  margin: 0;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 550;
+  line-height: 1.2;
+  color: var(--ost-ink);
+  background: var(--ost-surface);
+  border: 1px solid var(--ost-line);
+  border-radius: 0.35rem;
+  box-shadow: none;
+}
+.ost-btn:hover,
+.ost-btn:focus,
+.action-bar :is(button, a[role="button"]):hover,
+.action-bar :is(button, a[role="button"]):focus {
+  color: var(--ost-ink);
+  background: var(--ost-bg);
+  border-color: var(--ost-accent);
+  box-shadow: none;
+}
 .toolbar :is(button, a[role="button"]),
 .actions-row :is(button, a[role="button"]),
-.action-bar :is(button, a[role="button"]),
 .label-toolbar :is(button, a[role="button"]),
 .label-preview-actions :is(button, a[role="button"]),
 .block-card > button,
@@ -414,10 +438,44 @@ form.block-card > button,
   flex: 1 1 12rem;
 }
 
+.item-head { margin-bottom: 0.85rem; }
+.item-head h1 { margin-bottom: 0.4rem; }
+.item-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.55rem;
+  margin: 0;
+}
+
+.ost-dialog {
+  width: min(46rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  margin: auto;
+  padding: 1.15rem 1.2rem 1.2rem;
+  background: var(--ost-surface);
+  color: var(--ost-ink);
+  border: 0;
+  border-radius: 0.4rem;
+  border-top: 3px solid var(--ost-accent);
+}
+.ost-dialog::backdrop {
+  background: rgba(18, 24, 38, 0.45);
+}
+.ost-dialog h2 { margin: 0 0 0.35rem; }
+.ost-dialog > form > .muted { margin: 0 0 0.9rem; }
+.ost-dialog .label-size-grid { margin-bottom: 1rem; }
+.ost-dialog .actions-row { margin: 0; }
+
 .detail-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr);
+  grid-template-columns: 1fr;
   gap: 1.5rem;
+  align-items: start;
+}
+.detail-grid-photo {
+  grid-template-columns: minmax(11rem, 0.85fr) minmax(0, 1.25fr);
 }
 .form-grid {
   display: grid;
@@ -454,7 +512,10 @@ form.block-card > button,
   align-items: end;
 }
 @media (max-width: 55.99rem) {
-  .detail-grid, .form-grid, .field-row { grid-template-columns: 1fr; }
+  .form-grid, .field-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 39.99rem) {
+  .detail-grid-photo { grid-template-columns: 1fr; }
 }
 
 .detail-photo { max-width: 100%; height: auto; border-radius: 0.4rem; }
