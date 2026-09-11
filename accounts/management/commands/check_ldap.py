@@ -119,7 +119,6 @@ class Command(BaseCommand):
             )
             if not in_member and in_uid:
                 self.stdout.write(
-                    "  Note: django-auth-ldap REQUIRE_GROUP uses groupOfNames "
-                    "member, not memberUid. Login can fail even if memberUid matches."
+                    "  posix memberUid match (accepted for login and roles)."
                 )
         conn.unbind_s()

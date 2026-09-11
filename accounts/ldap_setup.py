@@ -1,4 +1,4 @@
-"""LDAP configuration (OSTdata pattern)."""
+"""LDAP configuration."""
 import logging
 import os
 
@@ -6,11 +6,43 @@ from config.security_checks import ldap_tls_is_required
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_LDAP_USER_FILTER = "(uid=%(user)s)"
+
 
 def _as_bool(value) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+class PosixOrGroupOfNamesType:
+    """posixGroup (memberUid) or groupOfNames (member).
+
+    Campus directories often use posix groups; django-auth-ldap's
+    GroupOfNamesType only looks at ``member`` and would reject valid users.
+    """
+
+    def __init__(self, name_attr="cn"):
+        from django_auth_ldap.config import GroupOfNamesType, PosixGroupType
+
+        self._posix = PosixGroupType(name_attr)
+        self._names = GroupOfNamesType(name_attr)
+
+    def user_groups(self, ldap_user, group_search):
+        seen = {}
+        for info in list(self._posix.user_groups(ldap_user, group_search)) + list(
+            self._names.user_groups(ldap_user, group_search)
+        ):
+            seen[info[0]] = info
+        return list(seen.values())
+
+    def is_member(self, ldap_user, group_dn):
+        if self._posix.is_member(ldap_user, group_dn):
+            return True
+        return bool(self._names.is_member(ldap_user, group_dn))
+
+    def group_name_from_info(self, group_info):
+        return self._posix.group_name_from_info(group_info)
 
 
 def apply_ldap_tls_options(ldap_module, options: dict, cacert: str = "") -> dict:
@@ -84,7 +116,7 @@ def configure_ldap_from_env(g, env):
     connect_timeout = g.get("AUTH_LDAP_CONNECT_TIMEOUT", 5)
     user_search_base = g.get("AUTH_LDAP_USER_SEARCH_BASE", "")
     group_search_base = g.get("AUTH_LDAP_GROUP_SEARCH_BASE", "")
-    user_filter = g.get("AUTH_LDAP_USER_FILTER", "(uid=%(user)s)")
+    user_filter = (g.get("AUTH_LDAP_USER_FILTER") or "").strip() or DEFAULT_LDAP_USER_FILTER
     staff_dn = g.get("LDAP_GROUP_STAFF_DN", "")
     superuser_dn = g.get("LDAP_GROUP_SUPERUSER_DN", "")
     supervisor_dn = g.get("LDAP_GROUP_SUPERVISOR_DN", "")
@@ -96,7 +128,7 @@ def configure_ldap_from_env(g, env):
 
     try:
         import ldap  # type: ignore
-        from django_auth_ldap.config import GroupOfNamesType, LDAPGroupQuery, LDAPSearch
+        from django_auth_ldap.config import LDAPGroupQuery, LDAPSearch
 
         g["AUTHENTICATION_BACKENDS"] = (
             "django_auth_ldap.backend.LDAPBackend",
@@ -114,7 +146,7 @@ def configure_ldap_from_env(g, env):
             "last_name": "sn",
             "email": "mail",
         }
-        g["AUTH_LDAP_GROUP_TYPE"] = GroupOfNamesType()
+        g["AUTH_LDAP_GROUP_TYPE"] = PosixOrGroupOfNamesType()
 
         if user_search_base:
             g["AUTH_LDAP_USER_SEARCH"] = LDAPSearch(
@@ -126,7 +158,7 @@ def configure_ldap_from_env(g, env):
             g["AUTH_LDAP_GROUP_SEARCH"] = LDAPSearch(
                 group_search_base,
                 ldap.SCOPE_SUBTREE,
-                "(objectClass=groupOfNames)",
+                "(|(objectClass=posixGroup)(objectClass=groupOfNames))",
             )
 
         require_parts = []

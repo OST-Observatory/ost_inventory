@@ -101,6 +101,22 @@ class LdapTlsTests(TestCase):
         conn.simple_bind_s.assert_not_called()
 
 
+class PosixOrGroupOfNamesTests(TestCase):
+    def test_memberuid_counts_as_member(self):
+        from accounts.ldap_setup import PosixOrGroupOfNamesType
+
+        ldap_user = MagicMock()
+        ldap_user.attrs = {"uid": ["rhainich"]}
+        ldap_user.dn = "cn=rhainich,ou=People,dc=example,dc=de"
+        ldap_user.connection.compare_s.side_effect = lambda dn, attr, value: attr == "memberUid"
+        group_type = PosixOrGroupOfNamesType()
+        self.assertTrue(
+            group_type.is_member(
+                ldap_user, "cn=betreuer,ou=Groups,dc=example,dc=de"
+            )
+        )
+
+
 class MediaAccessTests(TestCase):
     def setUp(self):
         self.student = User.objects.create_user(

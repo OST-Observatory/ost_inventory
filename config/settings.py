@@ -143,7 +143,9 @@ AUTH_LDAP_BIND_PASSWORD = env.str("LDAP_BIND_PASSWORD", default="")
 AUTH_LDAP_USER_SEARCH_BASE = env.str("LDAP_USER_SEARCH_BASE", default="")
 AUTH_LDAP_GROUP_SEARCH_BASE = env.str("LDAP_GROUP_SEARCH_BASE", default="")
 AUTH_LDAP_CONNECT_TIMEOUT = env.int("LDAP_CONNECT_TIMEOUT", default=5)
-AUTH_LDAP_USER_FILTER = env.str("LDAP_USER_FILTER", default="(uid=%(user)s)")
+AUTH_LDAP_USER_FILTER = (
+    env.str("LDAP_USER_FILTER", default="").strip() or "(uid=%(user)s)"
+)
 AUTH_LDAP_TLS_CACERT = env.str("LDAP_TLS_CACERT", default="")
 LDAP_GROUP_STAFF_DN = env.str("LDAP_GROUP_STAFF_DN", default="")
 LDAP_GROUP_SUPERUSER_DN = env.str("LDAP_GROUP_SUPERUSER_DN", default="")

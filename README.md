@@ -314,7 +314,6 @@ LDAP_BIND_DN=
 LDAP_BIND_PASSWORD=
 LDAP_USER_SEARCH_BASE=ou=people,dc=example,dc=edu
 LDAP_GROUP_SEARCH_BASE=ou=groups,dc=example,dc=edu
-LDAP_USER_FILTER=(uid=%(user)s)
 LDAP_GROUP_STUDENT_DN=cn=inventory-students,ou=groups,dc=example,dc=edu
 LDAP_GROUP_SUPERVISOR_DN=cn=inventory-supervisors,ou=groups,dc=example,dc=edu
 LDAP_GROUP_STAFF_DN=cn=inventory-staff,ou=groups,dc=example,dc=edu
@@ -345,10 +344,9 @@ journalctl -u ost-inventory -t ost-inventory -p info | grep -i ldap
 
 Set `LDAP_DEBUG=True` temporarily for `django_auth_ldap` traces, then restart
 and try one login. Typical causes: URI/STARTTLS mismatch, bind DN rejected,
-`LDAP_USER_SEARCH_BASE` / `(uid=%(user)s)` finding no entry, or the user not
-listed in `member` of any required group (`groupOfNames`). `memberUid` on
-posix groups is checked only after a successful login for role flags; it does
-not satisfy `AUTH_LDAP_REQUIRE_GROUP`.
+wrong `LDAP_USER_SEARCH_BASE`, or the account not in any of the configured
+role groups (`member` or `memberUid`). `LDAP_USER_FILTER` defaults to
+`(uid=%(user)s)` and can stay empty.
 
 ### 7. Email
 
