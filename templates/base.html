@@ -1,7 +1,7 @@
 {% load static %}
 {% load display %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -96,6 +96,10 @@
         </li>
       </ul>
     </details>
+    {% else %}
+    <ul>
+      <li><button type="button" class="nav-action" data-theme-toggle>Theme</button></li>
+    </ul>
     {% endif %}
   </nav>
   <main class="container page">
