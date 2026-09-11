@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
@@ -15,14 +14,14 @@ def build_urlpatterns(*, subpath=False):
     ``ProxyPass /inventory`` Apache sets SCRIPT_NAME=/inventory and PATH_INFO
     is the remainder; mounting the app at "" avoids /inventory/inventory/.
     """
-    media_prefix = settings.MEDIA_URL.lstrip("/")
+    # PATH_INFO never includes FORCE_SCRIPT_NAME, so this stays "media/".
     common = [
         path("admin/", admin.site.urls),
         path("login/", InventoryLoginView.as_view(), name="login"),
         path("logout/", InventoryLogoutView.as_view(), name="logout"),
         path("i/<int:pk>/", ItemDetailView.as_view(), name="item_short"),
         path("l/<int:pk>/", LocationDetailView.as_view(), name="location_short"),
-        path(f"{media_prefix}<path:path>", protected_media, name="protected_media"),
+        path("media/<path:path>", protected_media, name="protected_media"),
     ]
     if subpath:
         return [

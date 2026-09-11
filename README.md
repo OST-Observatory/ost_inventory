@@ -296,7 +296,10 @@ Leave `FORCE_SCRIPT_NAME` empty on a dedicated vhost (`ProxyPass /`). On a
 shared host where the public URL is `https://host/inventory/…` and Apache
 uses `ProxyPass /inventory`, set `FORCE_SCRIPT_NAME=/inventory` so links stay
 `/inventory/labels/` instead of `/inventory/inventory/labels/`. Then alias
-static files at `/inventory/static/` as well.
+static files at `/inventory/static/` as well. Photos stay on Django at
+`/inventory/media/…`; do **not** `Alias` that path. Restart gunicorn after
+the change so `MEDIA_URL` is `/inventory/media/` (a relative `media/` URL
+resolves against `/inventory/items/5/` and the photo appears broken).
 
 ### 6. LDAP
 

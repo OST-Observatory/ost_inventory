@@ -162,8 +162,10 @@ class InventoryFlowTests(TestCase):
                 self.assertEqual(resp.status_code, 302)
                 item.refresh_from_db()
                 self.assertTrue(item.photo)
+                self.assertTrue(item.photo.url.startswith("/media/"))
                 replaced = self.client.get(reverse("inventory:item_detail", args=[item.pk]))
                 self.assertContains(replaced, "Replace photo")
+                self.assertContains(replaced, 'src="/media/')
 
     def test_search_requires_role(self):
         outsider = User.objects.create_user(username="x", password="x")

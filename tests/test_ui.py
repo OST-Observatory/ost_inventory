@@ -279,5 +279,9 @@ class SubpathUrlTests(TestCase):
             self.assertEqual(reverse("login"), "/inventory/login/")
             self.assertEqual(reverse("accounts:access"), "/inventory/access/")
             self.assertEqual(reverse("item_short", args=[4]), "/inventory/i/4/")
+            self.assertEqual(
+                reverse("protected_media", kwargs={"path": "items/cam.jpg"}),
+                "/inventory/media/items/cam.jpg",
+            )
         finally:
             set_script_prefix("/")

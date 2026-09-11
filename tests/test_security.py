@@ -129,6 +129,10 @@ class MediaAccessTests(TestCase):
         self.url = reverse("protected_media", kwargs={"path": self.rel.as_posix()})
         self.client = Client()
 
+    def test_media_url_is_path_absolute(self):
+        self.assertTrue(self.url.startswith("/media/"))
+        self.assertTrue(settings.MEDIA_URL.startswith("/"))
+
     def test_anonymous_redirected(self):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 302)

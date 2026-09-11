@@ -22,8 +22,12 @@ DATABASES = {
 
 _force = env("FORCE_SCRIPT_NAME", default="").strip()
 FORCE_SCRIPT_NAME = _force or None
-if (FORCE_SCRIPT_NAME or "").rstrip("/") == "/inventory":
+_script = (FORCE_SCRIPT_NAME or "").rstrip("/")
+if _script == "/inventory":
     ROOT_URLCONF = "config.urls_subpath"
+# Path-absolute URLs so photos/CSS do not resolve relative to /inventory/items/5/.
+STATIC_URL = f"{_script}/static/" if _script else "/static/"
+MEDIA_URL = f"{_script}/media/" if _script else "/media/"
 
 CSRF_TRUSTED_ORIGINS = env.list("TRUSTED_ORIGIN", default=[])
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
