@@ -541,6 +541,35 @@ class LabelPngTests(TestCase):
                     self.assertEqual(img.getpixel((x, y)), white, msg=size.key)
             self.assertEqual(img.getpixel((pad, pad)), white, msg=size.key)
 
+    def test_medium_qr_fills_printable_height(self):
+        size = LABEL_SIZES["40x30"]
+        pad = mm_to_px(MARGIN_MEDIUM_MM)
+        qr_box = size.height_px - 2 * pad
+        png = render_label_png(
+            "https://polaris.astro.physik.uni-potsdam.de/inventory/i/12/",
+            "Canon EOS 6D body with battery grip and a very long extra name",
+            "#0012",
+            "",
+            size,
+        )
+        img = Image.open(BytesIO(png)).convert("RGB")
+        x = pad + qr_box // 2
+        blacks = sum(
+            1
+            for y in range(pad, pad + qr_box)
+            if img.getpixel((x, y))[0] < 128
+        )
+        self.assertGreater(blacks, qr_box // 5, msg="QR should fill printable height")
+        # Inventory number is required even when the name is truncated.
+        col_x = pad + qr_box + mm_to_px(2.0)
+        text_x = col_x + (size.width_px - col_x - pad) // 2
+        text_blacks = sum(
+            1
+            for y in range(pad, pad + qr_box)
+            if img.getpixel((min(text_x, img.size[0] - 1), y))[0] < 128
+        )
+        self.assertGreater(text_blacks, 10)
+
 
 class StocktakeFlowTests(TestCase):
     def setUp(self):
