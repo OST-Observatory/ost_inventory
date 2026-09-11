@@ -1,10 +1,10 @@
 """Shared Django settings for ost_inventory."""
 from pathlib import Path
-import os
 
 import environ
 
 from accounts.ldap_setup import configure_ldap_from_env
+from config.mail import SMTP_BACKEND, resolve_email_backend
 from config.security_checks import normalize_django_env, validate_production_settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -122,15 +122,18 @@ THUMBNAIL_ALIASES = {
 }
 
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="inventory@localhost")
+EMAIL_METHOD = env("EMAIL_METHOD", default="")
 EMAIL_HOST = env("EMAIL_HOST", default="")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
-if EMAIL_HOST:
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-else:
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=30)
+EMAIL_SENDMAIL = env("EMAIL_SENDMAIL", default="/usr/sbin/sendmail")
+EMAIL_BACKEND = resolve_email_backend(EMAIL_METHOD, EMAIL_HOST)
+if EMAIL_BACKEND == SMTP_BACKEND and not (EMAIL_HOST or "").strip():
+    EMAIL_HOST = "localhost"
 
 # LDAP env (configured only when LDAP_SERVER_URI is set)
 AUTH_LDAP_SERVER_URI = env.str("LDAP_SERVER_URI", default="")
@@ -148,9 +151,6 @@ LDAP_GROUP_SUPERVISOR_DN = env.str("LDAP_GROUP_SUPERVISOR_DN", default="")
 LDAP_GROUP_STUDENT_DN = env.str("LDAP_GROUP_STUDENT_DN", default="")
 
 configure_ldap_from_env(globals(), env)
-
-LOG_DIR = env("LOG_DIR", default=str(BASE_DIR / "logs"))
-os.makedirs(LOG_DIR, exist_ok=True)
 
 if DJANGO_ENV == "production":
     from .settings_production import *  # noqa: F401,F403

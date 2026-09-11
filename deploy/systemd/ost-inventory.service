@@ -9,9 +9,16 @@ Group=www-data
 WorkingDirectory=/opt/ost_inventory
 EnvironmentFile=/opt/ost_inventory/.env
 Environment=DJANGO_ENV=production
+Environment=PYTHONUNBUFFERED=1
+SyslogIdentifier=ost-inventory
+StandardOutput=journal
+StandardError=journal
+SyslogLevelPrefix=true
 ExecStart=/opt/ost_inventory/.venv/bin/gunicorn \
     --workers 3 \
     --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
     --bind unix:/run/ost-inventory/gunicorn.sock \
     config.wsgi:application
 Restart=on-failure
@@ -21,7 +28,7 @@ ProtectHome=yes
 PrivateTmp=yes
 UMask=0077
 MemoryMax=512M
-ReadWritePaths=/opt/ost_inventory/media /opt/ost_inventory/logs /run/ost-inventory
+ReadWritePaths=/opt/ost_inventory/media /run/ost-inventory
 
 [Install]
 WantedBy=multi-user.target

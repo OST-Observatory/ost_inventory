@@ -9,6 +9,11 @@ Group=www-data
 WorkingDirectory=/opt/ost_inventory
 EnvironmentFile=/opt/ost_inventory/.env
 Environment=DJANGO_ENV=production
+Environment=PYTHONUNBUFFERED=1
+SyslogIdentifier=ost-inventory-reminders
+StandardOutput=journal
+StandardError=journal
+SyslogLevelPrefix=true
 ExecStart=/opt/ost_inventory/.venv/bin/python manage.py send_overdue_reminders
 NoNewPrivileges=yes
 ProtectSystem=strict
@@ -16,4 +21,3 @@ ProtectHome=yes
 PrivateTmp=yes
 UMask=0077
 MemoryMax=256M
-ReadWritePaths=/opt/ost_inventory/logs

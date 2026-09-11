@@ -39,8 +39,23 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {
-        "console": {"class": "logging.StreamHandler"},
+    "formatters": {
+        "journal": {"format": "%(levelname)s %(name)s: %(message)s"},
     },
-    "root": {"handlers": ["console"], "level": "WARNING"},
+    "handlers": {
+        "journal": {
+            "class": "config.journal.JournalStreamHandler",
+            "formatter": "journal",
+        },
+    },
+    "root": {"handlers": ["journal"], "level": "WARNING"},
+    "loggers": {
+        "django.request": {
+            "handlers": ["journal"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "inventory": {"handlers": ["journal"], "level": "INFO", "propagate": False},
+        "accounts": {"handlers": ["journal"], "level": "INFO", "propagate": False},
+    },
 }
