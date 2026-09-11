@@ -189,6 +189,22 @@ class InventoryFlowTests(TestCase):
         html = self.client.get(reverse("inventory:search"), {"q": "optics"})
         self.assertEqual(html.content.decode().count(item.name), 1)
 
+    def test_search_by_inventory_number(self):
+        from inventory.search import filter_items
+
+        item = Item.objects.create(
+            name="Quiet name xyz",
+            location=self.loc,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.login(username="writer", password="x")
+        for q in (item.inventory_number, f"#{item.pk}", str(item.pk)):
+            pks = list(filter_items(Item.objects.all(), q=q).values_list("pk", flat=True))
+            self.assertIn(item.pk, pks, msg=q)
+            resp = self.client.get(reverse("inventory:search"), {"q": q})
+            self.assertContains(resp, "Quiet name xyz")
+
     def test_short_urls(self):
         item = Item.objects.create(
             name="Camera",

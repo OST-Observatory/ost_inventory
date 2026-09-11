@@ -2,6 +2,16 @@ from django.db import connection
 from django.db.models import Exists, OuterRef, Q
 
 
+def _inventory_number_q(q):
+    """Match #{pk} / #0042 / 42. The number is derived from pk, not a column."""
+    text = (q or "").strip()
+    if text.startswith("#"):
+        text = text[1:].strip()
+    if not text.isdigit():
+        return Q()
+    return Q(pk=int(text))
+
+
 def _related_text_q(q):
     """Match related rows without joining them into the item queryset."""
     from inventory.models import Category, Item, Project
@@ -33,6 +43,7 @@ def filter_items(
     q = (q or "").strip()
     if q:
         related = _related_text_q(q)
+        by_number = _inventory_number_q(q)
         if connection.vendor == "postgresql":
             from django.contrib.postgres.search import (
                 SearchQuery,
@@ -65,6 +76,7 @@ def filter_items(
                     | Q(comment__icontains=q)
                     | Q(container__icontains=q)
                     | related
+                    | by_number
                 )
                 .order_by("-rank", "-sim", "name", "pk")
             )
@@ -75,6 +87,7 @@ def filter_items(
                 | Q(comment__icontains=q)
                 | Q(container__icontains=q)
                 | related
+                | by_number
             ).order_by("name", "pk")
 
     if category:
