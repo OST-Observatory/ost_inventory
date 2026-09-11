@@ -1,111 +1,224 @@
 # OST Inventory
 
-Web-based inventory system for the observatory / astronomy institute.
+Web inventory for an observatory or astronomy institute: find equipment, record
+where it lives, lend it out, print QR labels, and run a stocktake from a phone.
 
-See [`ost_inventory_initial.plan.md`](ost_inventory_initial.plan.md) for the full specification.
+The interface is English. Everyone who uses the site must sign in. Photos are
+never served as public files; they go through the app after a permission check.
 
-## Quick start (development)
+## Features
+
+- **Search** — name, description, comment, inventory number, location, project,
+  container, and host item. PostgreSQL adds full-text search and typo-tolerant
+  matching (`pg_trgm`). SQLite (development) uses case-insensitive contains.
+- **Items** — room plus optional place (e.g. `PRA / 2a`), 1–4 categories,
+  optional project and container, quantity (exact or approximate), description,
+  comment, photo. **Installed in** links a part to a host item; the part then
+  follows the host’s location.
+- **Photos** — upload on create/edit, or **Take photo** / **Replace photo** on
+  the item page (rear camera on a phone). JPEG, PNG, and WebP; max 5 MB; images
+  are re-encoded and stored under UUID names.
+- **Loans** — one open loan per item, due date, optional borrower contact.
+  Borrower name and contact are hidden unless the user has that permission.
+  Overdue reminders can be sent daily.
+- **Locations** — rooms and places, with a per-location item list.
+- **QR labels** — PNG, ZIP, and ODS for T50-style sizes (50×80, 40×30, 40×20,
+  30×20 mm, plus a cable flag). Print from the label printer’s own app.
+- **Stocktake** — a dated physical count (separate from **Still here** / not
+  seen recently).
+- **CSV** — import (preview, then commit) and export. Matching on import is
+  active item + name + location.
+- **Access control** — capabilities on Django groups, editable in the app
+  (**Admin → Access control**). Django’s `/admin/` is separate and follows
+  `is_staff`.
+
+Stable QR targets (do not change these paths):
+
+| Kind | Path |
+|------|------|
+| Item | `/i/<id>/` |
+| Location | `/l/<id>/` |
+
+The usual UI lives under `/inventory/` (search, item pages, tools). Short URLs
+and `/login/` sit at the site root so a label still works if the app is moved
+behind a hostname of its own.
+
+## Requirements
+
+- Python 3.12 (Django 5.2)
+- Development: SQLite (created automatically)
+- Production: PostgreSQL 14+, `postgresql-contrib` (`pg_trgm`)
+- Label PNGs: DejaVu fonts (`fonts-dejavu-core` on Debian/Ubuntu)
+- Production front: Apache with `ssl`, `headers`, `proxy`, `proxy_http`
+- Optional: campus LDAP (`ldaps://` or LDAP + STARTTLS)
+
+Do not copy `db.sqlite3` onto a production host. Production refuses SQLite,
+debug mode, an empty `ALLOWED_HOSTS`, and a short or placeholder `SECRET_KEY`.
+
+---
+
+## Development
+
+Use this on a laptop or a throwaway VM. It is not a production configuration.
+
+### 1. Packages
+
+Debian/Ubuntu:
 
 ```bash
+sudo apt install python3 python3-venv python3-dev libpq-dev libldap2-dev libsasl2-dev \
+  fonts-dejavu-core
+```
+
+`libpq-dev` and the LDAP libraries are needed to build `psycopg2` and
+`python-ldap` from `requirements.txt`. Production installs wheels from the
+lockfile and may skip the `-dev` packages if the wheels include them.
+
+### 2. Checkout and virtualenv
+
+```bash
+git clone <repository-url> ost_inventory
+cd ost_inventory
 python3 -m venv .venv
 source .venv/bin/activate
+pip install -U pip
 pip install -r requirements.txt
+```
+
+### 3. Environment file
+
+```bash
 cp .env.example .env
 chmod 600 .env
+```
+
+Keep `DJANGO_ENV=development`. You can leave `SECRET_KEY` as the example value
+locally; production will reject it. Leave `LDAP_SERVER_URI` empty to use Django
+username/password only. Mail goes to the console unless you set `EMAIL_HOST` or
+`EMAIL_METHOD`.
+
+### 4. Database and first user
+
+```bash
 python manage.py migrate
-python manage.py createsuperuser   # set is_supervisor or is_staff as needed
+python manage.py createsuperuser
+```
+
+`migrate` creates SQLite at `db.sqlite3` and seeds groups `student`,
+`supervisor`, and `staff` with the default capabilities below.
+
+Open Django admin (`/admin/`) as that superuser and set **Supervisor** (and
+usually **Staff**) on your user so you can add items. Superusers bypass the
+capability checks; the flags still matter for everyone else.
+
+```bash
 python manage.py runserver
 ```
 
-Local auth uses Django’s `ModelBackend` when `LDAP_SERVER_URI` is empty.
+Sign in at <http://127.0.0.1:8000/login/>. Search is `/inventory/`.
 
-Role flags on the user still map onto Django groups at login (`student`, `supervisor`, `staff`).
-What those groups may do is configured under **Admin → Access control**:
-
-| Default group | Rights |
-|------|--------|
-| `student` | Read (no borrower PII, no inactive items) |
-| `supervisor` | Read + write, borrower PII, inactive items, labels, CSV import |
-| `staff` | Supervisor rights + permanent delete + access control |
-| Superuser | All permissions (bypass) |
-
-`is_staff` still controls the Django admin site. Extra local groups can be created under **Admin → Groups**.
-
-## LDAP
-
-Configure the same env vars as OSTdata (`LDAP_SERVER_URI`, group DNs, …) in `.env`.
-When the URI is set, `accounts/ldap_setup.py` enables `django-auth-ldap` and syncs
-`is_student` / `is_supervisor` / `is_staff` / `is_superuser`.
-
-Production requires `ldaps://` or `LDAP_START_TLS=True`. A STARTTLS failure does
-not fall back to plaintext bind.
-
-## Useful commands
+### 5. Day-to-day
 
 ```bash
-# CSV import (dry-run first; dry-run does not write)
-python manage.py import_inventory --file=data.csv --dry-run
-python manage.py import_inventory --file=data.csv
-
-# Overdue loan emails (systemd timer in deploy/)
-# Dry-run logs loan IDs and recipient counts, not addresses.
-python manage.py send_overdue_reminders --dry-run
-python manage.py send_overdue_reminders
-
 python manage.py test
+python manage.py import_inventory --file=data/inventory_import.csv --dry-run
+python manage.py import_inventory --file=data/inventory_import.csv
+python manage.py send_overdue_reminders --dry-run
 ```
 
-CSV columns: `name`, `location_path` (required; `PRA/2a` = room/place); optional `description`, `quantity`,
-`quantity_approximate` (`yes`/`true`/`1`), `container`, `categories` (semicolon-separated, max 4), 
-`project`, `comment`.
-Limits: 2 MB, 2000 rows, 500 characters/field, location depth 2.
+CSV files under `data/` are gitignored. Dry-run import rolls back; dry-run
+reminders log loan IDs and recipient **counts**, not addresses.
 
-## Stable QR URLs
+To reset the local database: stop `runserver`, delete `db.sqlite3` (and
+optionally `media/`), then `migrate` and `createsuperuser` again.
 
-- Item: `/i/<id>/`
-- Location: `/l/<id>/`
+### Roles and capabilities
 
-Do not change these paths.
+At login, `is_student` / `is_supervisor` / `is_staff` are mirrored onto the
+Django groups of the same names. What those groups may do is stored as
+capabilities (**Admin → Access control**), not hard-coded beyond the defaults:
 
-## Production deploy
+| Group | Default rights |
+|------|----------------|
+| `student` | Read (no borrower name/contact, no inactive items) |
+| `supervisor` | Read, write, borrower PII, inactive items, CSV import, QR labels |
+| `staff` | Supervisor rights, permanent delete, access-control UI |
+| Superuser | All capabilities |
 
-1. Install under e.g. `/opt/ost_inventory`, create venv.
-2. Install locked dependencies: `pip install --require-hashes -r requirements.lock`
-   (do not install production from unconstrained `requirements.txt`).
-3. Copy `.env.example` to a file **owned by the service user** (not world-readable):
-   `install -m 600 .env.example /opt/ost_inventory/.env` then fill secrets.
-   Set `DJANGO_ENV=production`, PostgreSQL (see below), LDAP, `ALLOWED_HOSTS`, `TRUSTED_ORIGIN`, `EMAIL_*`.
-   The systemd unit also forces `DJANGO_ENV=production`.
-4. Create the database, then `python manage.py migrate && python manage.py collectstatic`
-5. Install units from `deploy/systemd/` and Apache snippet from `deploy/apache/`
-   (HTTPS redirect, `X-Forwarded-Proto`, no public media alias).
-6. If served under a subpath, set `FORCE_SCRIPT_NAME=/inventory` (or similar)
+`is_staff` still gates `/admin/`. Extra groups can be created under
+**Admin → Groups**.
 
-Regenerate the lockfile after bumping `requirements.txt`:
+### Optional LDAP in development
+
+Set `LDAP_SERVER_URI` (and the search bases and group DNs) in `.env`. The
+LDAP backend is added in front of `ModelBackend`. Group DNs map to
+`is_student`, `is_supervisor`, `is_staff`, and `is_superuser`. Leave
+`LDAP_TLS_CACERT` empty unless verification fails (see
+[LDAP](#ldap) under production).
+
+---
+
+## Production
+
+These steps assume Debian/Ubuntu, Apache, PostgreSQL on the same host, and
+install path `/opt/ost_inventory`. Adjust hosts, users, and paths to match
+the server. Use a dedicated Unix user instead of `www-data` if you can; the
+shipped units use `www-data` so they work with a default Apache.
+
+### 1. System packages
+
+```bash
+sudo apt install python3 python3-venv postgresql postgresql-contrib \
+  apache2 libapache2-mod-ssl \
+  fonts-dejavu-core
+sudo a2enmod ssl headers proxy proxy_http
+```
+
+Need a compiler for LDAP/Postgres wheels only if pip cannot use binaries:
+
+```bash
+sudo apt install python3-dev libpq-dev libldap2-dev libsasl2-dev build-essential
+```
+
+### 2. Application user and directories
+
+```bash
+sudo mkdir -p /opt/ost_inventory /opt/ost_inventory/media /opt/ost_inventory/staticfiles
+sudo chown -R www-data:www-data /opt/ost_inventory/media
+sudo chmod 750 /opt/ost_inventory/media
+```
+
+Deploy the tree as a user who may write `/opt/ost_inventory` (git clone or
+rsync), then make sure `www-data` can **read** the code and venv and **write**
+`media/`.
+
+### 3. Code and locked dependencies
+
+```bash
+cd /opt/ost_inventory
+sudo python3 -m venv .venv
+sudo /opt/ost_inventory/.venv/bin/pip install -U pip
+sudo /opt/ost_inventory/.venv/bin/pip install --require-hashes -r requirements.lock
+```
+
+Do **not** install production from unconstrained `requirements.txt`. After
+changing `requirements.txt` on a development machine:
 
 ```bash
 pip install pip-tools
 pip-compile --generate-hashes -o requirements.lock requirements.txt
 ```
 
-### PostgreSQL
+Commit the new lockfile and install that on the server.
 
-Production **requires** PostgreSQL (`DJANGO_ENV=production` refuses SQLite). Development
-keeps using SQLite; do not copy `db.sqlite3` onto the server. Search uses Postgres
-full-text search plus the `pg_trgm` extension (migration `inventory.0002_pg_trgm`).
-
-Install the server and extension files (Debian/Ubuntu):
+### 4. PostgreSQL
 
 ```bash
 sudo apt install postgresql postgresql-contrib
+sudo -u postgres psql
 ```
 
-Create a dedicated role **without** `SUPERUSER`, `CREATEDB`, or `CREATEROLE`, and a
-UTF-8 database owned by that role so the first `migrate` can install `pg_trgm`
-(it is a trusted extension; the database owner may `CREATE EXTENSION`):
-
 ```sql
--- as a PostgreSQL superuser (e.g. sudo -u postgres psql)
 CREATE ROLE ost_inventory LOGIN PASSWORD 'use-a-long-random-password';
 CREATE DATABASE ost_inventory
   OWNER ost_inventory
@@ -115,66 +228,103 @@ CREATE DATABASE ost_inventory
   TEMPLATE template0;
 ```
 
-If `C.UTF-8` is missing, use another UTF-8 locale such as `en_US.UTF-8`. Confirm
-with `\l` that encoding is `UTF8`.
+If `C.UTF-8` is missing, use another UTF-8 locale such as `en_US.UTF-8`.
+Confirm encoding with `\l`. The role must **not** have `SUPERUSER`,
+`CREATEDB`, or `CREATEROLE`. Owning the database is enough for `migrate` to
+install the trusted `pg_trgm` extension.
 
-Match `.env` to that database:
+Restrict `pg_hba.conf` to `scram-sha-256`. For a database on another host use
+`hostssl` and `DATABASE_SSLMODE=verify-full` (libpq uses the system CA, or
+`PGSSLROOTCERT`).
+
+Optional: a second login that only has DML for gunicorn, while `migrate` keeps
+using the owner. After the first migrate, grant `SELECT, INSERT, UPDATE, DELETE`
+on tables, `USAGE, SELECT` on sequences, and `ALTER DEFAULT PRIVILEGES` for
+future tables. That runtime user must not own the database.
+
+### 5. Secrets (`.env`)
+
+```bash
+sudo install -m 600 -o www-data -g www-data .env.example /opt/ost_inventory/.env
+sudo -u www-data editor /opt/ost_inventory/.env
+```
+
+Generate a secret (at least 50 characters; not the example string):
+
+```bash
+python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
+```
+
+Minimum production values:
 
 ```
 DJANGO_ENV=production
+SECRET_KEY=<output of the command above>
+ALLOWED_HOSTS=inventory.example.edu
+TRUSTED_ORIGIN=https://inventory.example.edu
+FORCE_SCRIPT_NAME=
+SECURE_SSL_REDIRECT=True
 DATABASE_NAME=ost_inventory
 DATABASE_USER=ost_inventory
-DATABASE_PASSWORD=use-a-long-random-password
+DATABASE_PASSWORD=<database password>
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
 DATABASE_SSLMODE=prefer
+DEFAULT_FROM_EMAIL=inventory@example.edu
 ```
 
-Use `DATABASE_SSLMODE=verify-full` when the database is not on the app host (libpq
-then checks the server certificate against the system CA, or `PGSSLROOTCERT`).
-`prefer` is enough for a local socket or localhost with a server-side `hostssl`
-rule. Restrict `pg_hba.conf` to `scram-sha-256` (and `hostssl` for remote clients).
+The systemd unit also sets `DJANGO_ENV=production`. `.env` must stay mode
+`600` and owned by the service user. The development `.env` in a shared git
+checkout is not a production secret store.
 
-On the app host, as the service user (`.env` is read from the project directory),
-apply the existing migration chain (do not squash it for the first deploy) and
-check the connection:
+`TRUSTED_ORIGIN` is the CSRF origin (`https://` + host, no path). List several
+hosts in `ALLOWED_HOSTS` as a comma-separated list if needed.
+
+Leave `FORCE_SCRIPT_NAME` empty when Apache forwards the full path (dedicated
+vhost below). Set it to `/inventory` only if the proxy **strips** that prefix
+before gunicorn.
+
+### 6. LDAP
+
+Leave `LDAP_SERVER_URI` empty only if you will use local Django accounts
+(emergency admin). Production LDAP must be `ldaps://` or `ldap://` with
+`LDAP_START_TLS=True`. A STARTTLS failure does not fall back to a plaintext
+bind.
+
+Typical variables:
+
+```
+LDAP_SERVER_URI=ldaps://ldap.example.edu
+LDAP_START_TLS=False
+LDAP_BIND_DN=
+LDAP_BIND_PASSWORD=
+LDAP_USER_SEARCH_BASE=ou=people,dc=example,dc=edu
+LDAP_GROUP_SEARCH_BASE=ou=groups,dc=example,dc=edu
+LDAP_USER_FILTER=(uid=%(user)s)
+LDAP_GROUP_STUDENT_DN=cn=inventory-students,ou=groups,dc=example,dc=edu
+LDAP_GROUP_SUPERVISOR_DN=cn=inventory-supervisors,ou=groups,dc=example,dc=edu
+LDAP_GROUP_STAFF_DN=cn=inventory-staff,ou=groups,dc=example,dc=edu
+LDAP_GROUP_SUPERUSER_DN=
+```
+
+`LDAP_TLS_CACERT` is optional. Certificate checks are always on; an empty
+value uses the system trust store (`/etc/ldap/ldap.conf` / `ca-certificates`).
+Set it to a PEM file only if verification fails because the LDAP CA is not in
+that store. Confirm with:
 
 ```bash
-cd /opt/ost_inventory
-sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py migrate
-sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py check --deploy
+openssl s_client -connect ldap.example.edu:636 -showcerts </dev/null
+# STARTTLS on 389:
+openssl s_client -connect ldap.example.edu:389 -starttls ldap -showcerts </dev/null
 ```
 
-`migrate` also seeds the default ACL groups (`student`, `supervisor`, `staff`).
-Create an emergency local superuser if LDAP is not in place yet:
-`python manage.py createsuperuser` (set `is_staff` / `is_supervisor` as needed).
+`Verify return code: 0 (ok)` means you can leave `LDAP_TLS_CACERT` empty.
 
-Optional: a second database login with DML-only rights for gunicorn, while
-`migrate` keeps using the database owner. After the first migrate, grant
-`SELECT, INSERT, UPDATE, DELETE` on tables and `USAGE, SELECT` on sequences, plus
-`ALTER DEFAULT PRIVILEGES` for future tables. The runtime user must not own the
-database if you want this split to mean anything.
+### 7. Email
 
-### Logging (journald)
+Development prints mail to the console. Production should send for real.
 
-The units write to the systemd journal (stderr, including gunicorn access/error).
-There is no app log directory. Watch logs with:
-
-```bash
-journalctl -u ost-inventory -f
-journalctl -u ost-inventory-reminders
-journalctl -u ost-inventory -p warning
-```
-
-Restrict who can read the journal (reminder dry-run still omits addresses, but
-request logs may contain paths). Do not grant `adm` / `systemd-journal` broadly.
-
-### Email
-
-Development prints mail to the console unless `EMAIL_HOST` or `EMAIL_METHOD` is
-set. Production should use a real backend.
-
-**Remote SMTP** (submission, STARTTLS):
+**Remote submission (STARTTLS):**
 
 ```
 EMAIL_METHOD=smtp
@@ -187,8 +337,8 @@ EMAIL_HOST_PASSWORD=...
 DEFAULT_FROM_EMAIL=inventory@example.edu
 ```
 
-**Local MTA** (Postfix/Exim on port 25) — this is the option that fits the
-hardened units (`NoNewPrivileges=yes` cannot exec setgid `sendmail`):
+**Local MTA** (Postfix/Exim on port 25). This matches the hardened units:
+`NoNewPrivileges=yes` cannot run a setgid `sendmail` binary.
 
 ```
 EMAIL_METHOD=smtp
@@ -201,20 +351,134 @@ EMAIL_HOST_PASSWORD=
 DEFAULT_FROM_EMAIL=inventory@example.edu
 ```
 
-Allow the service user to submit locally (Postfix `mynetworks` / `127.0.0.1`,
-or a `smtpd` restriction that accepts the app host). Test with
-`python manage.py send_overdue_reminders --dry-run` then a real run.
+Allow localhost in the MTA (`mynetworks` or an equivalent restriction).
 
-**sendmail binary** (`EMAIL_METHOD=sendmail`, default `EMAIL_SENDMAIL=/usr/sbin/sendmail`):
-works if the binary is not setgid, or if you drop `NoNewPrivileges` on
-`ost-inventory-reminders.service` only. Prefer SMTP to localhost instead.
+`EMAIL_METHOD=sendmail` pipes to `EMAIL_SENDMAIL` (default `/usr/sbin/sendmail`).
+Prefer SMTP to localhost unless that binary is not setgid.
+`EMAIL_USE_TLS` and `EMAIL_USE_SSL` are mutually exclusive (587 vs 465).
 
-`EMAIL_USE_TLS` and `EMAIL_USE_SSL` are mutually exclusive (587 + STARTTLS vs 465
-+ implicit TLS).
+### 8. Migrate, static files, deploy check
 
-### Backup
+```bash
+cd /opt/ost_inventory
+sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py migrate
+sudo /opt/ost_inventory/.venv/bin/python manage.py collectstatic --noinput
+sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py check --deploy
+```
 
-- Daily `pg_dump` of the database (encrypt the file; keep a copy off the app host):
+Apply the existing migration chain; do not squash it for the first deploy.
+`migrate` seeds the default ACL groups.
+
+Create an emergency local superuser (especially before LDAP is proven):
+
+```bash
+sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py createsuperuser
+```
+
+Set **Staff** / **Supervisor** in `/admin/` if that account should work in the
+inventory UI as well as Django admin.
+
+`collectstatic` may run as root; Apache only needs to read
+`/opt/ost_inventory/staticfiles`.
+
+### 9. systemd
+
+```bash
+sudo cp /opt/ost_inventory/deploy/systemd/ost-inventory.socket \
+        /opt/ost_inventory/deploy/systemd/ost-inventory.service \
+        /opt/ost_inventory/deploy/systemd/ost-inventory-reminders.service \
+        /opt/ost_inventory/deploy/systemd/ost-inventory-reminders.timer \
+        /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ost-inventory.socket ost-inventory.service
+sudo systemctl enable --now ost-inventory-reminders.timer
+sudo systemctl status ost-inventory.socket ost-inventory.service
+```
+
+Gunicorn listens on `unix:/run/ost-inventory/gunicorn.sock` (mode `0660`,
+`www-data`). Logs go to the journal (no log directory):
+
+```bash
+journalctl -u ost-inventory -f
+journalctl -u ost-inventory-reminders
+journalctl -u ost-inventory -p warning
+```
+
+Restrict journal access (`adm` / `systemd-journal`). Reminder dry-run omits
+addresses; access logs can still contain URL paths.
+
+If you change `User=` in the units, also change socket ownership, `.env`
+owner, `media/` owner, and Apache’s ability to connect to the socket.
+
+Reminders run at 08:00 local time (`OnCalendar` in the timer). Test first:
+
+```bash
+sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py send_overdue_reminders --dry-run
+sudo systemctl start ost-inventory-reminders.service
+```
+
+### 10. Apache and TLS
+
+Prefer a **dedicated vhost** so `/i/`, `/l/`, `/login/`, `/admin/`, `/media/`,
+and `/inventory/` all hit gunicorn. Do **not** `Alias` `/media/`; photos are
+served by Django after login.
+
+Enable the shipped snippet as a starting point (`deploy/apache/ost-inventory.conf`)
+and merge it into the TLS vhost. Example:
+
+```apache
+<VirtualHost *:80>
+    ServerName inventory.example.edu
+    Redirect permanent / https://inventory.example.edu/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName inventory.example.edu
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/inventory.example.edu/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/inventory.example.edu/privkey.pem
+
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader unset X-Forwarded-For
+    LimitRequestBody 8388608
+
+    Alias /static /opt/ost_inventory/staticfiles
+    <Directory /opt/ost_inventory/staticfiles>
+        Options -Indexes
+        Require all granted
+    </Directory>
+
+    ProxyPass /static !
+    ProxyPass / unix:/run/ost-inventory/gunicorn.sock|http://localhost/
+    ProxyPassReverse / unix:/run/ost-inventory/gunicorn.sock|http://localhost/
+</VirtualHost>
+```
+
+```bash
+sudo apache2ctl configtest
+sudo systemctl reload apache2
+```
+
+If this vhost only proxies `/inventory/` on a shared name, **also** proxy
+`/i`, `/l`, `/login`, `/logout`, `/admin`, and `/media`, or QR labels will
+404. Leave `FORCE_SCRIPT_NAME` empty in the dedicated-vhost setup above.
+
+Firewall: 80/443 from campus or VPN only. Do not expose gunicorn’s socket or
+a TCP bind on the network.
+
+### 11. Smoke test
+
+1. `https://inventory.example.edu/login/` (HTTP should redirect to HTTPS).
+2. Sign in (LDAP or local superuser).
+3. Open search, add a room under **Tools → Locations**, add an item, take or
+   upload a photo, generate a QR PNG, scan `/i/<id>/`.
+4. `journalctl -u ost-inventory -e` for errors.
+5. Confirm static CSS loads (`/static/…`) and that a photo URL
+   requires login.
+
+### 12. Backups
+
+- Daily encrypted `pg_dump` **off** the app host:
 
 ```bash
 sudo -u postgres pg_dump -Fc -d ost_inventory -f ost_inventory.dump
@@ -222,51 +486,57 @@ sudo -u postgres pg_dump -Fc -d ost_inventory -f ost_inventory.dump
 # sudo -u postgres pg_restore --clean --if-exists -d ost_inventory ost_inventory.dump
 ```
 
-- Media directory (`MEDIA_ROOT`) via rsync/borg
-- Test restore at least once
+- `media/` (item photos) via rsync or borg, same schedule.
+- Test a restore on a spare database at least once.
+- Split encryption keys from the app host; keep an immutable or offsite copy.
 
-## Tests
+### 13. Updates
 
 ```bash
-python manage.py test tests
+cd /opt/ost_inventory
+sudo -u deploy git pull    # or rsync the release
+sudo /opt/ost_inventory/.venv/bin/pip install --require-hashes -r requirements.lock
+sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py migrate
+sudo /opt/ost_inventory/.venv/bin/python manage.py collectstatic --noinput
+sudo systemctl restart ost-inventory.service
 ```
 
-## Security and operations
+---
 
-### Implemented defaults
+## CSV format
 
-- Production refuses unknown `DJANGO_ENV`, debug mode, placeholder `SECRET_KEY`, empty
-  `ALLOWED_HOSTS`, and non-Postgres databases.
-- App logs go to the systemd journal (no log directory on disk).
-- HTTPS redirect and HSTS are on in production; cookies are Secure.
-- LDAP in production is TLS-only; STARTTLS errors abort without binding.
-- Photos are served only after login/role checks; uploads are re-encoded, size-capped,
-  and stored under UUID names.
-- CSV dry-run is rolled back; import/export size and formula injection are limited.
-- Login is rate-limited in-app (5 failures / 10 minutes, then 15-minute backoff).
-- Pico CSS and htmx are self-hosted; CSP and Permissions-Policy headers are set.
-- Borrower name/contact are visible only with the “See borrower name and contact” permission.
-- Reminder dry-run does not print email addresses. Keep journal access restricted.
+Required: `name`, `location_path` (`Room` or `Room/Place`, e.g. `PRA/2a`).
 
-`.env` must be `chmod 600` and owned by the service user. The development `.env` in a
-shared checkout is not a production secret store.
+Optional: `description`, `quantity`, `quantity_approximate` (`yes` / `true` /
+`1`), `container`, `categories` (semicolon-separated, max 4), `project`,
+`comment`, `installed_in` (inventory number such as `#0004` or numeric id; the
+host must already exist).
 
-### Further recommendations
+Limits: 2 MB, 2000 rows, 500 characters per field, location depth 2. Formula-looking
+cells are sanitised on export. Web import is under **Tools → Import**; the
+management command is equivalent.
 
-These are not implemented in this repository and should be handled operationally:
+An active item with the same name at the same location is updated; otherwise a
+row is created.
 
-- Run the service as a dedicated Unix user instead of shared `www-data`.
-- Firewall: only 80/443 from the campus network (or VPN); no direct Gunicorn/TCP.
-- PostgreSQL: role without SUPERUSER/CREATEDB/CREATEROLE; separate migration credentials;
-  `DATABASE_SSLMODE=verify-full` plus a CA when the database is remote.
-- Backups: encrypt dumps, split encryption keys from the app host, keep an immutable
-  or offsite copy, restrict who can restore, and test restores on a schedule.
-- CI: secret scan, `manage.py check --deploy`, test suite, `pip-audit` / OSV against
-  `requirements.lock`, and an SBOM per release.
-- Data lifecycle: retention and anonymization for loans, photos, logs, and backups;
-  a documented subject-access process.
-- Prefer SSO/MFA; restrict the local emergency admin to a jump host or VPN.
-- Pin installs to an internal package mirror when available.
-- After a `SECRET_KEY` leak or rotation, existing sessions and signed tokens are invalid
-  and users must sign in again.
-- Optional extra login protection: Apache `mod_ratelimit` or Fail2ban on `/login/`.
+---
+
+## Security (what the app already does)
+
+- Production settings validation (Postgres, `SECRET_KEY`, `ALLOWED_HOSTS`, no debug).
+- HTTPS redirect and HSTS; `Secure` cookies; `X-Forwarded-Proto` from Apache.
+- CSP and Permissions-Policy; Pico CSS and htmx are self-hosted.
+- LDAP in production is TLS-only.
+- Login rate limit: 5 failures / 10 minutes, then 15 minutes backoff.
+- Photos: authz, size/pixel cap, re-encode, UUID names, no public media alias.
+- CSV dry-run is transactional; import/export size limits.
+- Borrower PII only with the **See borrower name and contact** capability.
+
+After a `SECRET_KEY` leak or rotation, sessions are invalid and everyone must
+sign in again.
+
+Operational (not implemented in this repo): dedicated service user, campus
+firewall, `DATABASE_SSLMODE=verify-full` for remote Postgres, backup encryption
+and restore drills, CI (`check --deploy`, tests, `pip-audit` on the lockfile),
+data retention for loans/photos/logs, SSO/MFA, Fail2ban or `mod_ratelimit` on
+`/login/`.
