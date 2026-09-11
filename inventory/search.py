@@ -1,5 +1,16 @@
 from django.db import connection
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
+
+
+def _related_text_q(q):
+    """Match related rows without joining them into the item queryset."""
+    from inventory.models import Category, Item, Project
+
+    return (
+        Exists(Category.objects.filter(items=OuterRef("pk"), name__icontains=q))
+        | Exists(Project.objects.filter(pk=OuterRef("project_id"), name__icontains=q))
+        | Exists(Item.objects.filter(pk=OuterRef("installed_in_id"), name__icontains=q))
+    )
 
 
 def filter_items(
@@ -14,11 +25,14 @@ def filter_items(
     include_inactive=False,
 ):
     """Filter items for search UI. SQLite: icontains; PostgreSQL: full-text + trigram."""
+    from inventory.models import Category, Loan, Location
+
     if not include_inactive:
         queryset = queryset.filter(is_active=True)
 
     q = (q or "").strip()
     if q:
+        related = _related_text_q(q)
         if connection.vendor == "postgresql":
             from django.contrib.postgres.search import (
                 SearchQuery,
@@ -27,14 +41,14 @@ def filter_items(
                 TrigramSimilarity,
             )
 
+            # Only columns on Item: joining categories/project in SearchVector
+            # yields one row per match and DISTINCT cannot collapse them because
+            # rank/similarity differ per row.
             vector = (
                 SearchVector("name", weight="A")
                 + SearchVector("description", weight="B")
                 + SearchVector("comment", weight="C")
-                + SearchVector("categories__name", weight="B")
-                + SearchVector("project__name", weight="B")
                 + SearchVector("container", weight="B")
-                + SearchVector("installed_in__name", weight="B")
             )
             query = SearchQuery(q)
             queryset = (
@@ -43,26 +57,32 @@ def filter_items(
                     rank=SearchRank(vector, query),
                     sim=TrigramSimilarity("name", q),
                 )
-                .filter(Q(search=query) | Q(sim__gt=0.2) | Q(name__icontains=q))
-                .order_by("-rank", "-sim", "name")
+                .filter(
+                    Q(search=query)
+                    | Q(sim__gt=0.2)
+                    | Q(name__icontains=q)
+                    | Q(description__icontains=q)
+                    | Q(comment__icontains=q)
+                    | Q(container__icontains=q)
+                    | related
+                )
+                .order_by("-rank", "-sim", "name", "pk")
             )
         else:
             queryset = queryset.filter(
                 Q(name__icontains=q)
                 | Q(description__icontains=q)
                 | Q(comment__icontains=q)
-                | Q(categories__name__icontains=q)
-                | Q(project__name__icontains=q)
                 | Q(container__icontains=q)
-                | Q(installed_in__name__icontains=q)
-            )
+                | related
+            ).order_by("name", "pk")
 
     if category:
-        queryset = queryset.filter(categories__pk=category)
+        queryset = queryset.filter(
+            Exists(Category.objects.filter(pk=category, items=OuterRef("pk")))
+        )
 
     if location:
-        from .models import Location
-
         try:
             loc = Location.objects.get(pk=location)
         except (Location.DoesNotExist, ValueError, TypeError):
@@ -77,6 +97,8 @@ def filter_items(
         queryset = queryset.filter(container=container)
 
     if on_loan:
-        queryset = queryset.filter(loans__returned_at__isnull=True)
+        queryset = queryset.filter(
+            Exists(Loan.objects.filter(item_id=OuterRef("pk"), returned_at__isnull=True))
+        )
 
-    return queryset.distinct()
+    return queryset

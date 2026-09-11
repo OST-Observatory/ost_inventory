@@ -171,6 +171,24 @@ class InventoryFlowTests(TestCase):
         resp = self.client.get(reverse("inventory:search"))
         self.assertEqual(resp.status_code, 403)
 
+    def test_search_does_not_repeat_items(self):
+        from inventory.search import filter_items
+
+        optics = Category.objects.create(name="Optics")
+        camera = Category.objects.create(name="Camera optics")
+        item = Item.objects.create(
+            name="Adapter ring",
+            location=self.loc,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        item.categories.add(optics, camera)
+        self.client.login(username="writer", password="x")
+        pks = list(filter_items(Item.objects.all(), q="optics").values_list("pk", flat=True))
+        self.assertEqual(pks.count(item.pk), 1)
+        html = self.client.get(reverse("inventory:search"), {"q": "optics"})
+        self.assertEqual(html.content.decode().count(item.name), 1)
+
     def test_short_urls(self):
         item = Item.objects.create(
             name="Camera",
