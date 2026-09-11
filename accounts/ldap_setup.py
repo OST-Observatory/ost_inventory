@@ -274,3 +274,5 @@ def configure_ldap_from_env(g, env):
             populate_user.connect(_ldap_sync_custom_flags)
     except Exception:
         logger.warning("LDAP configuration failed", exc_info=True)
+        if str(g.get("DJANGO_ENV") or "").lower() == "production":
+            raise

@@ -20,8 +20,10 @@ DATABASES = {
     }
 }
 
-_force = env("FORCE_SCRIPT_NAME", default="")
+_force = env("FORCE_SCRIPT_NAME", default="").strip()
 FORCE_SCRIPT_NAME = _force or None
+if (FORCE_SCRIPT_NAME or "").rstrip("/") == "/inventory":
+    ROOT_URLCONF = "config.urls_subpath"
 
 CSRF_TRUSTED_ORIGINS = env.list("TRUSTED_ORIGIN", default=[])
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -35,6 +37,8 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", defa
 SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=False)
 SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+_ldap_log_level = "DEBUG" if env.bool("LDAP_DEBUG", default=False) else "INFO"
 
 LOGGING = {
     "version": 1,
@@ -57,5 +61,10 @@ LOGGING = {
         },
         "inventory": {"handlers": ["journal"], "level": "INFO", "propagate": False},
         "accounts": {"handlers": ["journal"], "level": "INFO", "propagate": False},
+        "django_auth_ldap": {
+            "handlers": ["journal"],
+            "level": _ldap_log_level,
+            "propagate": False,
+        },
     },
 }

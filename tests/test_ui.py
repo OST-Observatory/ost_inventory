@@ -2,8 +2,8 @@ from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
-from django.urls import reverse
+from django.test import Client, TestCase, override_settings
+from django.urls import reverse, set_script_prefix
 
 from inventory.models import Item, Loan, Location
 from inventory.templatetags.display import relative_due
@@ -267,3 +267,17 @@ class RelativeDueTests(TestCase):
         self.assertEqual(relative_due(today), "due today")
         self.assertEqual(relative_due(today + timedelta(days=3)), "due in 3 days")
         self.assertEqual(relative_due(today - timedelta(days=1)), "overdue 1 day")
+
+
+class SubpathUrlTests(TestCase):
+    @override_settings(ROOT_URLCONF="config.urls_subpath", FORCE_SCRIPT_NAME="/inventory")
+    def test_labels_url_is_not_doubled(self):
+        set_script_prefix("/inventory/")
+        try:
+            self.assertEqual(reverse("inventory:labels"), "/inventory/labels/")
+            self.assertEqual(reverse("inventory:search"), "/inventory/")
+            self.assertEqual(reverse("login"), "/inventory/login/")
+            self.assertEqual(reverse("accounts:access"), "/inventory/access/")
+            self.assertEqual(reverse("item_short", args=[4]), "/inventory/i/4/")
+        finally:
+            set_script_prefix("/")

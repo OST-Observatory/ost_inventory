@@ -296,3 +296,10 @@ class ReminderTests(TestCase):
         self.assertIsNotNone(self.loan_ok.last_reminder_sent_at)
         self.assertIsNone(self.loan_bad.last_reminder_sent_at)
         self.assertIn("failed", err.getvalue().lower())
+
+
+class CheckLdapCommandTests(TestCase):
+    def test_requires_configured_uri(self):
+        err = StringIO()
+        with self.assertRaises(CommandError):
+            call_command("check_ldap", stdout=StringIO(), stderr=err)

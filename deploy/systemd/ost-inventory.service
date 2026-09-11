@@ -19,6 +19,7 @@ ExecStart=/opt/ost_inventory/.venv/bin/gunicorn \
     --timeout 120 \
     --access-logfile - \
     --error-logfile - \
+    --no-control-socket \
     --bind unix:/run/ost-inventory/gunicorn.sock \
     config.wsgi:application
 Restart=on-failure

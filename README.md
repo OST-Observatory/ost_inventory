@@ -9,35 +9,37 @@ never served as public files; they go through the app after a permission check.
 ## Features
 
 - **Search** — name, description, comment, inventory number, location, project,
-  container, and host item. PostgreSQL adds full-text search and typo-tolerant
-  matching (`pg_trgm`). SQLite (development) uses case-insensitive contains.
+container, and host item. PostgreSQL adds full-text search and typo-tolerant
+matching (`pg_trgm`). SQLite (development) uses case-insensitive contains.
 - **Items** — room plus optional place (e.g. `PRA / 2a`), 1–4 categories,
-  optional project and container, quantity (exact or approximate), description,
-  comment, photo. **Installed in** links a part to a host item; the part then
-  follows the host’s location.
+optional project and container, quantity (exact or approximate), description,
+comment, photo. **Installed in** links a part to a host item; the part then
+follows the host’s location.
 - **Photos** — upload on create/edit, or **Take photo** / **Replace photo** on
-  the item page (rear camera on a phone). JPEG, PNG, and WebP; max 5 MB; images
-  are re-encoded and stored under UUID names.
+the item page (rear camera on a phone). JPEG, PNG, and WebP; max 5 MB; images
+are re-encoded and stored under UUID names.
 - **Loans** — one open loan per item, due date, optional borrower contact.
-  Borrower name and contact are hidden unless the user has that permission.
-  Overdue reminders can be sent daily.
+Borrower name and contact are hidden unless the user has that permission.
+Overdue reminders can be sent daily.
 - **Locations** — rooms and places, with a per-location item list.
 - **QR labels** — PNG, ZIP, and ODS for T50-style sizes (50×80, 40×30, 40×20,
-  30×20 mm, plus a cable flag). Print from the label printer’s own app.
+30×20 mm, plus a cable flag). Print from the label printer’s own app.
 - **Stocktake** — a dated physical count (separate from **Still here** / not
-  seen recently).
+seen recently).
 - **CSV** — import (preview, then commit) and export. Matching on import is
-  active item + name + location.
+active item + name + location.
 - **Access control** — capabilities on Django groups, editable in the app
-  (**Admin → Access control**). Django’s `/admin/` is separate and follows
-  `is_staff`.
+(**Admin → Access control**). Django’s `/admin/` is separate and follows
+`is_staff`.
 
 Stable QR targets (do not change these paths):
 
-| Kind | Path |
-|------|------|
-| Item | `/i/<id>/` |
+
+| Kind     | Path       |
+| -------- | ---------- |
+| Item     | `/i/<id>/` |
 | Location | `/l/<id>/` |
+
 
 The usual UI lives under `/inventory/` (search, item pages, tools). Short URLs
 and `/login/` sit at the site root so a label still works if the app is moved
@@ -56,6 +58,8 @@ Do not copy `db.sqlite3` onto a production host. Production refuses SQLite,
 debug mode, an empty `ALLOWED_HOSTS`, and a short or placeholder `SECRET_KEY`.
 
 ---
+
+
 
 ## Development
 
@@ -84,6 +88,8 @@ source .venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
 ```
+
+
 
 ### 3. Environment file
 
@@ -115,7 +121,7 @@ capability checks; the flags still matter for everyone else.
 python manage.py runserver
 ```
 
-Sign in at <http://127.0.0.1:8000/login/>. Search is `/inventory/`.
+Sign in at [http://127.0.0.1:8000/login/](http://127.0.0.1:8000/login/). Search is `/inventory/`.
 
 ### 5. Day-to-day
 
@@ -138,12 +144,14 @@ At login, `is_student` / `is_supervisor` / `is_staff` are mirrored onto the
 Django groups of the same names. What those groups may do is stored as
 capabilities (**Admin → Access control**), not hard-coded beyond the defaults:
 
-| Group | Default rights |
-|------|----------------|
-| `student` | Read (no borrower name/contact, no inactive items) |
+
+| Group        | Default rights                                                   |
+| ------------ | ---------------------------------------------------------------- |
+| `student`    | Read (no borrower name/contact, no inactive items)               |
 | `supervisor` | Read, write, borrower PII, inactive items, CSV import, QR labels |
-| `staff` | Supervisor rights, permanent delete, access-control UI |
-| Superuser | All capabilities |
+| `staff`      | Supervisor rights, permanent delete, access-control UI           |
+| Superuser    | All capabilities                                                 |
+
 
 `is_staff` still gates `/admin/`. Extra groups can be created under
 **Admin → Groups**.
@@ -157,6 +165,8 @@ LDAP backend is added in front of `ModelBackend`. Group DNs map to
 [LDAP](#ldap) under production).
 
 ---
+
+
 
 ## Production
 
@@ -179,6 +189,8 @@ Need a compiler for LDAP/Postgres wheels only if pip cannot use binaries:
 ```bash
 sudo apt install python3-dev libpq-dev libldap2-dev libsasl2-dev build-essential
 ```
+
+
 
 ### 2. Application user and directories
 
@@ -280,9 +292,11 @@ checkout is not a production secret store.
 `TRUSTED_ORIGIN` is the CSRF origin (`https://` + host, no path). List several
 hosts in `ALLOWED_HOSTS` as a comma-separated list if needed.
 
-Leave `FORCE_SCRIPT_NAME` empty when Apache forwards the full path (dedicated
-vhost below). Set it to `/inventory` only if the proxy **strips** that prefix
-before gunicorn.
+Leave `FORCE_SCRIPT_NAME` empty on a dedicated vhost (`ProxyPass /`). On a
+shared host where the public URL is `https://host/inventory/…` and Apache
+uses `ProxyPass /inventory`, set `FORCE_SCRIPT_NAME=/inventory` so links stay
+`/inventory/labels/` instead of `/inventory/inventory/labels/`. Then alias
+static files at `/inventory/static/` as well.
 
 ### 6. LDAP
 
@@ -319,6 +333,22 @@ openssl s_client -connect ldap.example.edu:389 -starttls ldap -showcerts </dev/n
 ```
 
 `Verify return code: 0 (ok)` means you can leave `LDAP_TLS_CACERT` empty.
+
+If login fails, do not turn on `DEBUG`. Probe from the app host:
+
+```bash
+cd /opt/ost_inventory
+sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py check_ldap
+sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py check_ldap --username YOUR_UID
+journalctl -u ost-inventory -t ost-inventory -p info | grep -i ldap
+```
+
+Set `LDAP_DEBUG=True` temporarily for `django_auth_ldap` traces, then restart
+and try one login. Typical causes: URI/STARTTLS mismatch, bind DN rejected,
+`LDAP_USER_SEARCH_BASE` / `(uid=%(user)s)` finding no entry, or the user not
+listed in `member` of any required group (`groupOfNames`). `memberUid` on
+posix groups is checked only after a successful login for role flags; it does
+not satisfy `AUTH_LDAP_REQUIRE_GROUP`.
 
 ### 7. Email
 
@@ -423,45 +453,34 @@ Prefer a **dedicated vhost** so `/i/`, `/l/`, `/login/`, `/admin/`, `/media/`,
 and `/inventory/` all hit gunicorn. Do **not** `Alias` `/media/`; photos are
 served by Django after login.
 
-Enable the shipped snippet as a starting point (`deploy/apache/ost-inventory.conf`)
-and merge it into the TLS vhost. Example:
+The `|http://localhost/` part of `ProxyPass` is only the dummy URL Apache uses
+with a Unix socket; it does not mean the app is bound to localhost. Forward the
+site root so gunicorn sees the real paths:
 
 ```apache
-<VirtualHost *:80>
-    ServerName inventory.example.edu
-    Redirect permanent / https://inventory.example.edu/
-</VirtualHost>
+RequestHeader set X-Forwarded-Proto "https"
+RequestHeader unset X-Forwarded-For
+LimitRequestBody 8388608
 
-<VirtualHost *:443>
-    ServerName inventory.example.edu
-    SSLEngine on
-    SSLCertificateFile /etc/letsencrypt/live/inventory.example.edu/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/inventory.example.edu/privkey.pem
+Alias /static /opt/ost_inventory/staticfiles
+<Directory /opt/ost_inventory/staticfiles>
+    Options -Indexes
+    Require all granted
+</Directory>
 
-    RequestHeader set X-Forwarded-Proto "https"
-    RequestHeader unset X-Forwarded-For
-    LimitRequestBody 8388608
-
-    Alias /static /opt/ost_inventory/staticfiles
-    <Directory /opt/ost_inventory/staticfiles>
-        Options -Indexes
-        Require all granted
-    </Directory>
-
-    ProxyPass /static !
-    ProxyPass / unix:/run/ost-inventory/gunicorn.sock|http://localhost/
-    ProxyPassReverse / unix:/run/ost-inventory/gunicorn.sock|http://localhost/
-</VirtualHost>
+ProxyPass /static !
+ProxyPass / unix:/run/ost-inventory/gunicorn.sock|http://localhost/
+ProxyPassReverse / unix:/run/ost-inventory/gunicorn.sock|http://localhost/
 ```
+
+A full example lives in `deploy/apache/ost-inventory.conf`. After changing
+units or Apache, `daemon-reload` / restart the **socket and service**, then
+`apache2ctl configtest` and reload Apache. Leave `FORCE_SCRIPT_NAME` empty.
 
 ```bash
 sudo apache2ctl configtest
 sudo systemctl reload apache2
 ```
-
-If this vhost only proxies `/inventory/` on a shared name, **also** proxy
-`/i`, `/l`, `/login`, `/logout`, `/admin`, and `/media`, or QR labels will
-404. Leave `FORCE_SCRIPT_NAME` empty in the dedicated-vhost setup above.
 
 Firewall: 80/443 from campus or VPN only. Do not expose gunicorn’s socket or
 a TCP bind on the network.
@@ -471,10 +490,12 @@ a TCP bind on the network.
 1. `https://inventory.example.edu/login/` (HTTP should redirect to HTTPS).
 2. Sign in (LDAP or local superuser).
 3. Open search, add a room under **Tools → Locations**, add an item, take or
-   upload a photo, generate a QR PNG, scan `/i/<id>/`.
+  upload a photo, generate a QR PNG, scan `/i/<id>/`.
 4. `journalctl -u ost-inventory -e` for errors.
 5. Confirm static CSS loads (`/static/…`) and that a photo URL
-   requires login.
+  requires login.
+
+
 
 ### 12. Backups
 
@@ -490,6 +511,8 @@ sudo -u postgres pg_dump -Fc -d ost_inventory -f ost_inventory.dump
 - Test a restore on a spare database at least once.
 - Split encryption keys from the app host; keep an immutable or offsite copy.
 
+
+
 ### 13. Updates
 
 ```bash
@@ -502,6 +525,8 @@ sudo systemctl restart ost-inventory.service
 ```
 
 ---
+
+
 
 ## CSV format
 
@@ -520,6 +545,8 @@ An active item with the same name at the same location is updated; otherwise a
 row is created.
 
 ---
+
+
 
 ## Security (what the app already does)
 
