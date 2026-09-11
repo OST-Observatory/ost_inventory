@@ -12,7 +12,12 @@ from accounts.permissions import user_can_admin, user_can_read, user_can_write
 from inventory.labels import (
     CABLE_FLAG_MM,
     CABLE_TAB_MM,
+    DPI,
     LABEL_SIZES,
+    MARGIN_COMPACT_MM,
+    MARGIN_LARGE_MM,
+    MARGIN_MEDIUM_MM,
+    mm_to_px,
     render_label_png,
     sil_rem,
 )
@@ -503,6 +508,38 @@ class LabelPngTests(TestCase):
                 (size.width_px, size.height_px),
                 msg=size.key,
             )
+            dpi = img.info.get("dpi")
+            self.assertIsNotNone(dpi, msg=size.key)
+            self.assertAlmostEqual(dpi[0], DPI, delta=1, msg=size.key)
+            self.assertNotEqual(img.mode, "1", msg=size.key)
+
+    def test_rectangular_labels_keep_white_margin(self):
+        margins = {
+            "large": MARGIN_LARGE_MM,
+            "medium": MARGIN_MEDIUM_MM,
+            "compact": MARGIN_COMPACT_MM,
+        }
+        for size in LABEL_SIZES.values():
+            if size.layout == "cable":
+                continue
+            png = render_label_png(
+                "http://testserver/i/1/",
+                "Camera body",
+                "#0001",
+                "Observatory / Box A",
+                size,
+            )
+            img = Image.open(BytesIO(png)).convert("RGB")
+            pad = max(1, mm_to_px(margins[size.layout]) - 1)
+            white = (255, 255, 255)
+            width, height = img.size
+            for x in (0, width - 1):
+                for y in range(height):
+                    self.assertEqual(img.getpixel((x, y)), white, msg=size.key)
+            for y in (0, height - 1):
+                for x in range(width):
+                    self.assertEqual(img.getpixel((x, y)), white, msg=size.key)
+            self.assertEqual(img.getpixel((pad, pad)), white, msg=size.key)
 
 
 class StocktakeFlowTests(TestCase):

@@ -9,16 +9,29 @@ from pathlib import Path
 import segno
 from PIL import Image, ImageDraw, ImageFont
 
+# T50 is 203 dpi = 8 dots/mm. The print head covers 48 mm of a 50 mm tape.
 DPI = 203
+DOTS_PER_MM = 8
+RENDER_SCALE = 2
 LABEL_SIZE_SESSION_KEY = "qr_label_size"
 DEFAULT_SIZE_KEY = "40x30"
 
 _FONT_REGULAR = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
 _FONT_BOLD = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
+# Inner inset, ~3× the previous values, so die-cut / head margins do not clip.
+MARGIN_LARGE_MM = 9.0
+MARGIN_MEDIUM_MM = 4.2
+MARGIN_COMPACT_MM = 3.6
+MARGIN_CABLE_MM = 2.7
+
 
 def mm_to_px(mm: float) -> int:
-    return max(1, round(mm / 25.4 * DPI))
+    return max(1, round(mm * DOTS_PER_MM))
+
+
+def _px(mm: float, scale: int) -> int:
+    return mm_to_px(mm) * scale
 
 
 @dataclass(frozen=True)
@@ -131,12 +144,21 @@ def _font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFon
 
 
 def _qr(url: str, box_px: int) -> Image.Image:
+    """Integer-module QR, centered in box_px so thermal dots stay aligned."""
     qr = segno.make(url, error="m")
+    modules = qr.symbol_size(scale=1, border=2)[0]
+    scale = max(1, box_px // modules)
     buf = BytesIO()
-    qr.save(buf, kind="png", scale=8, border=2, dark="#000000", light="#ffffff")
+    qr.save(buf, kind="png", scale=scale, border=2, dark="#000000", light="#ffffff")
     buf.seek(0)
-    img = Image.open(buf).convert("RGB")
-    return img.resize((box_px, box_px), Image.Resampling.NEAREST)
+    tile = Image.open(buf).convert("RGB")
+    if tile.size[0] > box_px:
+        tile = tile.resize((box_px, box_px), Image.Resampling.NEAREST)
+    canvas = Image.new("RGB", (box_px, box_px), "white")
+    x = (box_px - tile.size[0]) // 2
+    y = (box_px - tile.size[1]) // 2
+    canvas.paste(tile, (x, y))
+    return canvas
 
 
 def _ellipsize(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str:
@@ -185,145 +207,186 @@ def _paste_qr(canvas: Image.Image, url: str, box: int, xy: tuple[int, int]) -> N
     canvas.paste(_qr(url, box), xy)
 
 
-def _draw_text_block(draw, lines, font, x, y, line_gap=4, fill=0):
+def _draw_text_block(draw, lines, font, x, y, line_gap=4, fill=0, max_y=None):
     for line in lines:
-        draw.text((x, y), line, font=font, fill=fill)
         bbox = draw.textbbox((x, y), line, font=font)
+        if max_y is not None and bbox[3] > max_y:
+            break
+        draw.text((x, y), line, font=font, fill=fill)
         y = bbox[3] + line_gap
     return y
 
 
+def _finalize(img: Image.Image, out_size: tuple[int, int]) -> Image.Image:
+    """Downsample 2× art and snap to pure B/W for the T50 (no 1-bit PNG)."""
+    if img.size != out_size:
+        img = img.resize(out_size, Image.Resampling.BOX)
+    return img.convert("L").point(lambda p: 0 if p < 200 else 255, "L").convert("RGB")
+
+
 def render_label_png(url: str, title: str, subtitle: str, extra: str, size: LabelSize) -> bytes:
+    scale = RENDER_SCALE
     if size.layout == "cable":
-        img = _render_cable(url, title, subtitle)
+        img = _render_cable(url, title, subtitle, scale)
     elif size.layout == "large":
-        img = _render_large(url, title, subtitle, extra, size)
+        img = _render_large(url, title, subtitle, extra, size, scale)
     elif size.layout == "medium":
-        img = _render_medium(url, title, subtitle, size)
+        img = _render_medium(url, title, subtitle, size, scale)
     else:
-        img = _render_compact(url, title, subtitle, size)
+        img = _render_compact(url, title, subtitle, size, scale)
+    img = _finalize(img, (size.width_px, size.height_px))
     buf = BytesIO()
-    img.convert("1", dither=Image.Dither.NONE).save(buf, format="PNG")
+    img.save(buf, format="PNG", dpi=(DPI, DPI), optimize=True)
     return buf.getvalue()
 
 
-def _blank(size: LabelSize) -> Image.Image:
-    return Image.new("RGB", (size.width_px, size.height_px), "white")
+def _blank(width_px: int, height_px: int, scale: int) -> Image.Image:
+    return Image.new("RGB", (width_px * scale, height_px * scale), "white")
 
 
-def _render_large(url, title, subtitle, extra, size: LabelSize) -> Image.Image:
-    img = _blank(size)
+def _render_large(url, title, subtitle, extra, size: LabelSize, scale: int) -> Image.Image:
+    img = _blank(size.width_px, size.height_px, scale)
     draw = ImageDraw.Draw(img)
-    pad = mm_to_px(3)
-    qr_box = min(size.width_px - 2 * pad, mm_to_px(36))
-    _paste_qr(img, url, qr_box, ((size.width_px - qr_box) // 2, pad))
-    y = pad + qr_box + mm_to_px(2)
-    title_font = _font(22, bold=True)
-    sub_font = _font(18, bold=True)
-    extra_font = _font(16)
-    max_w = size.width_px - 2 * pad
-    y = _draw_text_block(draw, _wrap(draw, title, title_font, max_w, 3), title_font, pad, y)
+    pad = _px(MARGIN_LARGE_MM, scale)
+    max_y = img.size[1] - pad
+    qr_box = min(img.size[0] - 2 * pad, _px(36, scale))
+    _paste_qr(img, url, qr_box, ((img.size[0] - qr_box) // 2, pad))
+    y = pad + qr_box + _px(2, scale)
+    title_font = _font(22 * scale, bold=True)
+    sub_font = _font(18 * scale, bold=True)
+    extra_font = _font(16 * scale)
+    max_w = img.size[0] - 2 * pad
+    gap = 4 * scale
+    y = _draw_text_block(
+        draw, _wrap(draw, title, title_font, max_w, 3), title_font, pad, y, gap, max_y=max_y
+    )
     if subtitle:
-        y = _draw_text_block(draw, [subtitle], sub_font, pad, y)
+        y = _draw_text_block(draw, [subtitle], sub_font, pad, y, gap, max_y=max_y)
     if extra:
-        _draw_text_block(draw, _wrap(draw, extra, extra_font, max_w, 2), extra_font, pad, y)
+        _draw_text_block(
+            draw, _wrap(draw, extra, extra_font, max_w, 2), extra_font, pad, y, gap, max_y=max_y
+        )
     return img
 
 
-def _render_medium(url, title, subtitle, size: LabelSize) -> Image.Image:
-    img = _blank(size)
+def _render_medium(url, title, subtitle, size: LabelSize, scale: int) -> Image.Image:
+    img = _blank(size.width_px, size.height_px, scale)
     draw = ImageDraw.Draw(img)
-    pad = mm_to_px(1.4)
-    gap = mm_to_px(1.2)
-    text_col = max(mm_to_px(16), int(size.width_px * 0.44))
-    qr_box = min(
-        size.height_px - 2 * pad,
-        size.width_px - 2 * pad - gap - text_col,
-        mm_to_px(18),
-    )
+    pad = _px(MARGIN_MEDIUM_MM, scale)
+    gap = _px(1.2, scale)
+    inner_w = img.size[0] - 2 * pad
+    inner_h = img.size[1] - 2 * pad
+    qr_box = min(inner_h, _px(18, scale), inner_w * 55 // 100)
     _paste_qr(img, url, qr_box, (pad, pad))
     x = pad + qr_box + gap
-    max_w = size.width_px - x - pad
-    title_font = _font(12, bold=True)
-    sub_font = _font(11, bold=True)
+    max_w = img.size[0] - x - pad
+    max_y = img.size[1] - pad
+    title_font = _font(12 * scale, bold=True)
+    sub_font = _font(11 * scale, bold=True)
     y = pad
     y = _draw_text_block(
-        draw, _wrap(draw, title, title_font, max_w, 3), title_font, x, y, line_gap=1
+        draw,
+        _wrap(draw, title, title_font, max_w, 3),
+        title_font,
+        x,
+        y,
+        line_gap=scale,
+        max_y=max_y,
     )
     if subtitle:
-        draw.text((x, y + 1), _ellipsize(draw, subtitle, sub_font, max_w), font=sub_font, fill=0)
+        line = _ellipsize(draw, subtitle, sub_font, max_w)
+        bbox = draw.textbbox((x, y + scale), line, font=sub_font)
+        if bbox[3] <= max_y:
+            draw.text((x, y + scale), line, font=sub_font, fill=0)
     return img
 
 
-def _render_compact(url, title, subtitle, size: LabelSize) -> Image.Image:
-    img = _blank(size)
+def _render_compact(url, title, subtitle, size: LabelSize, scale: int) -> Image.Image:
+    img = _blank(size.width_px, size.height_px, scale)
     draw = ImageDraw.Draw(img)
-    pad = mm_to_px(1.2)
-    qr_box = size.height_px - 2 * pad
+    pad = _px(MARGIN_COMPACT_MM, scale)
+    qr_box = img.size[1] - 2 * pad
     _paste_qr(img, url, qr_box, (pad, pad))
-    x = pad + qr_box + mm_to_px(1)
-    max_w = size.width_px - x - pad
+    x = pad + qr_box + _px(1, scale)
+    max_w = img.size[0] - x - pad
+    max_y = img.size[1] - pad
     number = subtitle or title
-    num_font = _font(13, bold=True)
-    name_font = _font(11)
+    num_font = _font(13 * scale, bold=True)
+    name_font = _font(11 * scale)
     y = pad
-    draw.text((x, y), _ellipsize(draw, number, num_font, max_w), font=num_font, fill=0)
-    bbox = draw.textbbox((x, y), number, font=num_font)
-    y = bbox[3] + 2
+    num = _ellipsize(draw, number, num_font, max_w)
+    draw.text((x, y), num, font=num_font, fill=0)
+    bbox = draw.textbbox((x, y), num, font=num_font)
+    y = bbox[3] + 2 * scale
     if title and title != number:
-        leftover = size.height_px - pad - y
-        if leftover > 12:
+        leftover = max_y - y
+        if leftover > 12 * scale:
             for line in _wrap(draw, title, name_font, max_w, 2):
+                bbox = draw.textbbox((x, y), line, font=name_font)
+                if bbox[3] > max_y:
+                    break
                 draw.text((x, y), line, font=name_font, fill=0)
-                y = draw.textbbox((x, y), line, font=name_font)[3] + 1
+                y = bbox[3] + scale
     return img
 
 
-def _render_cable(url: str, title: str, number: str) -> Image.Image:
+def _render_cable(url: str, title: str, number: str, scale: int) -> Image.Image:
     """45×30 mm flag (two 45×15 faces) plus 35×7 mm wrap tab on the right."""
-    body_w, body_h = mm_to_px(45), mm_to_px(30)
-    face_h = mm_to_px(15)
-    tab_w, tab_h = mm_to_px(35), mm_to_px(7)
+    body_w, body_h = _px(45, scale), _px(30, scale)
+    face_h = _px(15, scale)
+    tab_w, tab_h = _px(35, scale), _px(7, scale)
     canvas = Image.new("RGB", (body_w + tab_w, body_h), "white")
-    face = _cable_face(url, title, number, body_w, face_h)
+    face = _cable_face(url, title, number, body_w, face_h, scale)
     canvas.paste(face, (0, 0))
     canvas.paste(face.rotate(180), (0, face_h))
     draw = ImageDraw.Draw(canvas)
     y_fold = face_h
-    for x in range(0, body_w, 6):
+    for x in range(0, body_w, 6 * scale):
         draw.point((x, y_fold), fill=0)
-        draw.point((x + 1, y_fold), fill=0)
+        draw.point((x + scale, y_fold), fill=0)
+    # Keep the 7 mm wrap outline close to its die-cut; only a 1 mm inset.
+    tab_inset = _px(1.0, scale)
     tab_y = (body_h - tab_h) // 2
     draw.rectangle(
-        [body_w, tab_y, body_w + tab_w - 1, tab_y + tab_h - 1],
+        [
+            body_w + tab_inset,
+            tab_y + tab_inset,
+            body_w + tab_w - 1 - tab_inset,
+            tab_y + tab_h - 1 - tab_inset,
+        ],
         outline=0,
-        width=1,
+        width=max(1, scale),
     )
     return canvas
 
 
-def _cable_face(url: str, title: str, number: str, width: int, height: int) -> Image.Image:
+def _cable_face(url: str, title: str, number: str, width: int, height: int, scale: int) -> Image.Image:
     face = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(face)
-    pad = mm_to_px(0.9)
-    qr_box = min(height - 2 * pad, mm_to_px(11))
+    pad = _px(MARGIN_CABLE_MM, scale)
+    qr_box = min(height - 2 * pad, _px(11, scale))
     _paste_qr(face, url, qr_box, (pad, (height - qr_box) // 2))
-    x = pad + qr_box + mm_to_px(1)
+    x = pad + qr_box + _px(1, scale)
     max_w = width - x - pad
-    num_font = _font(10, bold=True)
-    name_font = _font(9)
+    max_y = height - pad
+    num_font = _font(10 * scale, bold=True)
+    name_font = _font(9 * scale)
     y = pad
     label = number or title
-    draw.text((x, y), _ellipsize(draw, label, num_font, max_w), font=num_font, fill=0)
-    bbox = draw.textbbox((x, y), label, font=num_font)
-    y = bbox[3] + 1
+    line = _ellipsize(draw, label, num_font, max_w)
+    draw.text((x, y), line, font=num_font, fill=0)
+    bbox = draw.textbbox((x, y), line, font=num_font)
+    y = bbox[3] + scale
     if title and title != label:
-        leftover = height - pad - y
-        max_lines = 2 if leftover > 18 else 1
-        if leftover > 10:
-            for line in _wrap(draw, title, name_font, max_w, max_lines):
-                draw.text((x, y), line, font=name_font, fill=0)
-                y = draw.textbbox((x, y), line, font=name_font)[3]
+        leftover = max_y - y
+        max_lines = 2 if leftover > 18 * scale else 1
+        if leftover > 10 * scale:
+            for text_line in _wrap(draw, title, name_font, max_w, max_lines):
+                bbox = draw.textbbox((x, y), text_line, font=name_font)
+                if bbox[3] > max_y:
+                    break
+                draw.text((x, y), text_line, font=name_font, fill=0)
+                y = bbox[3]
     return face
 
 
