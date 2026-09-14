@@ -851,3 +851,60 @@ class InstalledInTests(TestCase):
         create = self.client.get(reverse("inventory:item_create"))
         self.assertContains(create, "Installed in")
         self.assertContains(create, "Not installed in another item")
+        self.assertContains(create, "data-host-search")
+
+    def test_edit_form_does_not_list_all_hosts(self):
+        extra = Item.objects.create(
+            name="Mount",
+            location=self.lab,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        edit = self.client.get(reverse("inventory:item_edit", args=[self.camera.pk]))
+        self.assertContains(edit, "data-host-search")
+        self.assertNotContains(edit, "Telescope")
+        self.assertNotContains(edit, "Mount")
+        detail = self.client.get(reverse("inventory:item_detail", args=[self.camera.pk]))
+        self.assertContains(detail, "Install in…")
+        self.assertContains(detail, "install-in-dialog")
+
+    def test_host_lookup_excludes_self_and_matches_name(self):
+        resp = self.client.get(
+            reverse("inventory:item_host_lookup"),
+            {"q": "Tele", "exclude": str(self.camera.pk)},
+        )
+        self.assertEqual(resp.status_code, 200)
+        labels = [row["label"] for row in resp.json()["results"]]
+        self.assertTrue(any("Telescope" in label for label in labels))
+        self.assertFalse(any("Camera" in label for label in labels))
+        hidden = self.client.get(
+            reverse("inventory:item_host_lookup"),
+            {"q": "Tele", "exclude": str(self.scope.pk)},
+        )
+        self.assertFalse(
+            any(row["id"] == self.scope.pk for row in hidden.json()["results"])
+        )
+
+    def test_install_endpoint_links_and_unlinks(self):
+        resp = self.client.post(
+            reverse("inventory:item_install", args=[self.camera.pk]),
+            {"installed_in": self.scope.pk},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.camera.refresh_from_db()
+        self.assertEqual(self.camera.installed_in_id, self.scope.pk)
+        self.assertEqual(self.camera.location_id, self.lab.pk)
+        clear = self.client.post(
+            reverse("inventory:item_install", args=[self.camera.pk]),
+            {"installed_in": ""},
+        )
+        self.assertEqual(clear.status_code, 302)
+        self.camera.refresh_from_db()
+        self.assertIsNone(self.camera.installed_in_id)
+
+    def test_reader_cannot_lookup_hosts(self):
+        self.client.logout()
+        User.objects.create_user(username="reader", password="x", is_student=True)
+        self.client.login(username="reader", password="x")
+        resp = self.client.get(reverse("inventory:item_host_lookup"), {"q": "Tele"})
+        self.assertEqual(resp.status_code, 403)

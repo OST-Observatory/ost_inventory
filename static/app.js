@@ -166,45 +166,39 @@ function dataUriToFile(uri, name) {
   return new File([bytes], name, { type: "image/png" });
 }
 
-function downloadSharedPng(btn) {
-  var card = btn.closest(".label-preview-card");
-  var link = card && card.querySelector("a[download]");
-  if (link) {
-    link.click();
-    return;
-  }
-  btn.textContent = "Use Download PNG";
-}
-
 function bindSharePng() {
+  document.querySelectorAll("[data-share-png]").forEach(function (btn) {
+    btn.hidden = !navigator.share;
+  });
   document.addEventListener("click", function (event) {
     var btn = event.target.closest("[data-share-png]");
     if (!btn) {
       return;
     }
     event.preventDefault();
-    var uri = btn.getAttribute("data-share-png");
-    var name = btn.getAttribute("data-share-name") || "label.png";
     if (!navigator.share) {
-      downloadSharedPng(btn);
       return;
     }
+    var card = btn.closest(".label-preview-card");
+    var img = card && card.querySelector("img.label-preview-img");
+    var uri = btn.getAttribute("data-share-png") || (img && img.getAttribute("src")) || "";
+    var name = btn.getAttribute("data-share-name") || "label.png";
     var file;
     var payload;
     try {
       file = dataUriToFile(uri, name);
-      payload = { files: [file], title: name, text: name };
+      payload = { files: [file] };
     } catch (err) {
-      downloadSharedPng(btn);
       return;
     }
-    // Decode synchronously so iOS still treats this as a user gesture.
-    // Do not fetch() the data: URI — connect-src 'self' blocks it.
+    // Files only: iOS rejects title/text together with a PNG and then looks like a failed share.
+    if (typeof navigator.canShare === "function" && !navigator.canShare(payload)) {
+      return;
+    }
     navigator.share(payload).catch(function (err) {
-      if (err && err.name === "AbortError") {
+      if (err && (err.name === "AbortError" || err.name === "NotAllowedError")) {
         return;
       }
-      downloadSharedPng(btn);
     });
   });
 }
@@ -249,20 +243,20 @@ function bindVideoScanner(opts) {
   var startBtn = document.getElementById(opts.startId);
   var stopBtn = document.getElementById(opts.stopId);
   var statusEl = opts.statusId ? document.getElementById(opts.statusId) : null;
-  var fallback = opts.fallbackId ? document.getElementById(opts.fallbackId) : null;
   if (!video || !startBtn) {
     return null;
   }
+  var stage = video.closest(".stocktake-camera");
   if (!("BarcodeDetector" in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     if (statusEl) {
       statusEl.textContent =
         "This browser cannot scan from the camera. Type the number below, or use Chrome or Safari.";
     }
+    startBtn.hidden = true;
+    if (stage) {
+      stage.classList.add("no-detector");
+    }
     return null;
-  }
-  startBtn.hidden = false;
-  if (fallback) {
-    fallback.hidden = true;
   }
   var stream = null;
   var timer = null;
@@ -270,6 +264,12 @@ function bindVideoScanner(opts) {
   var going = false;
   var lastTried = "";
   var inflight = false;
+
+  function setLive(on) {
+    if (stage) {
+      stage.classList.toggle("is-live", on);
+    }
+  }
 
   function stop() {
     going = false;
@@ -286,7 +286,7 @@ function bindVideoScanner(opts) {
       stream = null;
     }
     video.srcObject = null;
-    video.hidden = true;
+    setLive(false);
     if (stopBtn) {
       stopBtn.hidden = true;
     }
@@ -369,31 +369,40 @@ function bindVideoScanner(opts) {
       });
   }
 
-  startBtn.addEventListener("click", function () {
-    withDetector(function () {
-      navigator.mediaDevices
-        .getUserMedia({ video: { facingMode: "environment" }, audio: false })
-        .then(function (media) {
-          stream = media;
-          video.srcObject = media;
-          video.hidden = false;
-          startBtn.hidden = true;
-          if (stopBtn) {
-            stopBtn.hidden = false;
-          }
-          going = true;
-          tick();
-        })
-        .catch(function () {
-          startBtn.textContent = "Camera unavailable";
-        });
-    });
-  });
+  function start() {
+    if (going || stream) {
+      return;
+    }
+    withDetector(function () {});
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "environment" }, audio: false })
+      .then(function (media) {
+        stream = media;
+        video.srcObject = media;
+        setLive(true);
+        startBtn.hidden = true;
+        if (stopBtn) {
+          stopBtn.hidden = false;
+        }
+        going = true;
+        tick();
+      })
+      .catch(function () {
+        startBtn.hidden = false;
+        startBtn.textContent = "Camera unavailable";
+        if (statusEl) {
+          statusEl.textContent = "Allow the camera, or type the number below.";
+        }
+      });
+  }
+
+  startBtn.addEventListener("click", start);
   if (stopBtn) {
     stopBtn.addEventListener("click", stop);
   }
   if (opts.dialog) {
     opts.dialog.addEventListener("close", stop);
+    opts.dialog._scanStart = start;
   }
   return stop;
 }
@@ -403,7 +412,7 @@ function bindLabelScanners() {
     videoId: "stocktake-video",
     startId: "stocktake-camera-start",
     stopId: "stocktake-camera-stop",
-    fallbackId: "stocktake-camera-fallback",
+    statusId: "stocktake-camera-fallback",
     mode: "stocktake",
   });
   var dialog = document.getElementById("scan-lookup-dialog");
@@ -460,6 +469,9 @@ function bindDialogs() {
       var dialog = document.getElementById(openBtn.getAttribute("data-dialog-open"));
       if (dialog && dialog.showModal) {
         dialog.showModal();
+        if (typeof dialog._scanStart === "function") {
+          dialog._scanStart();
+        }
       }
       return;
     }
@@ -503,10 +515,102 @@ function bindPhotoCapture() {
   });
 }
 
+function bindItemHostPickers() {
+  document.querySelectorAll(".item-host-picker").forEach(function (picker) {
+    var search = picker.querySelector("[data-host-search]");
+    var results = picker.querySelector(".item-host-results");
+    var select = picker.querySelector("select");
+    var lookupUrl = picker.getAttribute("data-lookup-url");
+    if (!search || !results || !select || !lookupUrl) {
+      return;
+    }
+    var timer = null;
+    var exclude = picker.getAttribute("data-exclude") || "";
+
+    function setHost(id, label) {
+      var value = id ? String(id) : "";
+      if (value) {
+        var found = false;
+        Array.prototype.forEach.call(select.options, function (opt) {
+          if (opt.value === value) {
+            found = true;
+          }
+        });
+        if (!found) {
+          select.appendChild(new Option(label, value));
+        }
+      }
+      select.value = value;
+      results.hidden = true;
+      results.replaceChildren();
+      search.value = "";
+    }
+
+    function renderRows(rows) {
+      results.replaceChildren();
+      if (!rows.length) {
+        var empty = document.createElement("p");
+        empty.className = "muted";
+        empty.textContent = "No matching items.";
+        results.appendChild(empty);
+        results.hidden = false;
+        return;
+      }
+      rows.forEach(function (row) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "outline secondary";
+        btn.textContent = row.label;
+        if (row.location) {
+          var loc = document.createElement("span");
+          loc.className = "muted";
+          loc.textContent = " · " + row.location;
+          btn.appendChild(loc);
+        }
+        btn.addEventListener("click", function () {
+          setHost(row.id, row.label);
+        });
+        results.appendChild(btn);
+      });
+      results.hidden = false;
+    }
+
+    search.addEventListener("input", function () {
+      var q = (search.value || "").trim();
+      window.clearTimeout(timer);
+      if (!q) {
+        results.hidden = true;
+        results.replaceChildren();
+        return;
+      }
+      timer = window.setTimeout(function () {
+        var url = lookupUrl + "?q=" + encodeURIComponent(q);
+        if (exclude) {
+          url += "&exclude=" + encodeURIComponent(exclude);
+        }
+        fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" })
+          .then(function (res) {
+            if (!res.ok) {
+              return { results: [] };
+            }
+            return res.json();
+          })
+          .then(function (data) {
+            renderRows((data && data.results) || []);
+          })
+          .catch(function () {
+            renderRows([]);
+          });
+      }, 200);
+    });
+  });
+}
+
 function bindUi() {
   bindLabelFilters();
   bindNavDrawer();
   bindRoomPlaceSelects();
+  bindItemHostPickers();
   bindSharePng();
   bindLabelScanners();
   bindManualScan();

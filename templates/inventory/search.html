@@ -57,8 +57,7 @@
     <p class="actions-row">
       <button type="submit">Search</button>
       <button type="button" class="secondary outline" data-dialog-open="scan-lookup-dialog">Scan label</button>
-      <a role="button" class="secondary outline" href="{% url 'inventory:export_csv' %}?{{ request.GET.urlencode }}"
-         title="Spreadsheet formulas in exported cells are neutralized.">Export CSV</a>
+      <a role="button" class="secondary outline" href="{% url 'inventory:export_csv' %}?{{ request.GET.urlencode }}">Export CSV</a>
     </p>
   </form>
 </section>
@@ -69,25 +68,9 @@
 
 <dialog id="scan-lookup-dialog" class="ost-dialog">
   <h2>Scan label</h2>
-  <p class="muted">Point the camera at a QR code or barcode. Matching items and locations open automatically.</p>
-  <div class="stocktake-camera">
-    <video id="scan-lookup-video" playsinline autoplay muted hidden></video>
-    <p id="scan-lookup-status" class="muted"></p>
-    <p class="actions-row">
-      <button type="button" class="secondary" id="scan-lookup-start" hidden>Start camera</button>
-      <button type="button" class="outline secondary" id="scan-lookup-stop" hidden>Stop camera</button>
-      <button type="button" class="outline secondary" data-dialog-close>Close</button>
-    </p>
-  </div>
-  <form data-scan-manual data-scan-mode="lookup" data-scan-miss="scan-lookup-miss">
-    <label>
-      Or type the number
-      <input type="text" name="q" placeholder="#0012 or L12" autocomplete="off">
-    </label>
-    <p id="scan-lookup-miss" class="muted" hidden>No matching item or location.</p>
-    <p class="actions-row">
-      <button type="submit" class="secondary">Open</button>
-    </p>
-  </form>
+  <p class="actions-row">
+    <button type="button" class="outline secondary" data-dialog-close>Close</button>
+  </p>
+  {% include "inventory/partials/scan_panel.html" with video_id="scan-lookup-video" status_id="scan-lookup-status" start_id="scan-lookup-start" stop_id="scan-lookup-stop" mode="lookup" miss_id="scan-lookup-miss" hint="Point the camera at a QR code or barcode." %}
 </dialog>
 {% endblock %}

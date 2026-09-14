@@ -1,0 +1,18 @@
+<div
+  class="item-host-picker"
+  data-lookup-url="{% url 'inventory:item_host_lookup' %}"
+  {% if exclude_pk %}data-exclude="{{ exclude_pk }}"{% endif %}
+>
+  <p class="toolbar">
+    <input
+      type="search"
+      data-host-search
+      placeholder="Search name or #0012…"
+      autocomplete="off"
+      aria-label="Search host item"
+    >
+  </p>
+  <div class="item-host-results" hidden></div>
+  {{ field }}
+  {{ field.errors }}
+</div>

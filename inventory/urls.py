@@ -12,6 +12,8 @@ from inventory.views import (
     SearchView,
     item_deactivate,
     item_delete,
+    item_host_lookup,
+    item_install,
     item_photo,
     item_reactivate,
     loan_create,
@@ -42,9 +44,11 @@ app_name = "inventory"
 
 urlpatterns = [
     path("", SearchView.as_view(), name="search"),
+    path("items/lookup/", item_host_lookup, name="item_host_lookup"),
     path("items/add/", ItemCreateView.as_view(), name="item_create"),
     path("items/<int:pk>/", ItemDetailView.as_view(), name="item_detail"),
     path("items/<int:pk>/edit/", ItemUpdateView.as_view(), name="item_edit"),
+    path("items/<int:pk>/install/", item_install, name="item_install"),
     path("items/<int:pk>/deactivate/", item_deactivate, name="item_deactivate"),
     path("items/<int:pk>/reactivate/", item_reactivate, name="item_reactivate"),
     path("items/<int:pk>/delete/", item_delete, name="item_delete"),

@@ -53,6 +53,7 @@
       {% endwith %}
     {% endif %}
     <a href="{% url 'inventory:item_edit' item.pk %}" role="button">Edit</a>
+    <button type="button" data-dialog-open="install-in-dialog">Install in…</button>
     {% if item.is_active %}
       <form method="post" action="{% url 'inventory:item_deactivate' item.pk %}" class="inline js-confirm"
             data-confirm="Deactivate this item?">
@@ -192,6 +193,21 @@
   <p class="muted">No loans yet.</p>
   {% endif %}
 </div>
+
+{% if can_write %}
+<dialog id="install-in-dialog" class="ost-dialog">
+  <form method="post" action="{% url 'inventory:item_install' item.pk %}">
+    {% csrf_token %}
+    <h2>Install in…</h2>
+    <p class="muted">This item will follow the host's location. Choose “Not installed in another item” to unlink.</p>
+    {% include "inventory/partials/item_host_picker.html" with field=install_form.installed_in exclude_pk=item.pk %}
+    <p class="actions-row">
+      <button type="submit">Save</button>
+      <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
+    </p>
+  </form>
+</dialog>
+{% endif %}
 
 {% if can_labels and item.is_active %}
 <dialog id="qr-label-dialog" class="ost-dialog">

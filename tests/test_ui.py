@@ -234,6 +234,9 @@ class LabelsUiTests(TestCase):
         self.assertContains(resp, "Scan label")
         self.assertContains(resp, "scan-lookup-dialog")
         self.assertContains(resp, reverse("inventory:scan_lookup"))
+        self.assertContains(resp, "Start camera")
+        self.assertContains(resp, "Point the camera")
+        self.assertContains(resp, 'type="search"')
 
     def test_compact_defaults_to_barcode_preview(self):
         resp = self.client.post(

@@ -30,6 +30,49 @@ class RoomScopedPlaceSelect(forms.Select):
         return option
 
 
+def configure_installed_in_field(field, item=None, data=None, name="installed_in"):
+    """Validate against all legal hosts; render only empty + the current choice."""
+    host_qs = Item.objects.filter(is_active=True).order_by("name")
+    if item and item.pk:
+        exclude_pks = [item.pk, *item.installed_part_pks()]
+        host_qs = host_qs.exclude(pk__in=exclude_pks)
+        if item.installed_in_id:
+            host_qs = Item.objects.filter(
+                Q(pk__in=host_qs.values("pk")) | Q(pk=item.installed_in_id)
+            ).order_by("name")
+    field.queryset = host_qs
+    field.required = False
+    field.empty_label = "Not installed in another item"
+    field.label_from_instance = lambda obj: f"{obj.inventory_number} {obj.name}"
+    choices = [("", "Not installed in another item")]
+    selected_pk = None
+    if data is not None:
+        raw = data.get(name)
+        if raw not in (None, ""):
+            try:
+                selected_pk = int(raw)
+            except (TypeError, ValueError):
+                selected_pk = None
+    elif item and item.installed_in_id:
+        selected_pk = item.installed_in_id
+    if selected_pk:
+        host = Item.objects.filter(pk=selected_pk).first()
+        if host:
+            choices.append((str(host.pk), f"{host.inventory_number} {host.name}"))
+    field.choices = choices
+
+
+class InstalledInForm(forms.Form):
+    installed_in = forms.ModelChoiceField(queryset=Item.objects.none(), required=False)
+
+    def __init__(self, *args, item=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.item = item
+        configure_installed_in_field(
+            self.fields["installed_in"], item, self.data if self.is_bound else None
+        )
+
+
 class ItemForm(forms.ModelForm):
     room = forms.ModelChoiceField(
         queryset=Location.objects.none(),
@@ -133,19 +176,10 @@ class ItemForm(forms.ModelForm):
             existing = list(self.instance.categories.all()[:MAX_CATEGORIES])
             for i, cat in enumerate(existing, start=1):
                 self.fields[f"category_{i}"].initial = cat.name
-        host_qs = Item.objects.filter(is_active=True).order_by("name")
-        if self.instance.pk:
-            exclude_pks = [self.instance.pk, *self.instance.installed_part_pks()]
-            host_qs = host_qs.exclude(pk__in=exclude_pks)
-            if self.instance.installed_in_id:
-                host_qs = Item.objects.filter(
-                    Q(pk__in=host_qs.values("pk")) | Q(pk=self.instance.installed_in_id)
-                ).order_by("name")
-        self.fields["installed_in"].queryset = host_qs
-        self.fields["installed_in"].required = False
-        self.fields["installed_in"].empty_label = "Not installed in another item"
-        self.fields["installed_in"].label_from_instance = (
-            lambda obj: f"{obj.inventory_number} {obj.name}"
+        configure_installed_in_field(
+            self.fields["installed_in"],
+            self.instance if self.instance.pk else None,
+            self.data if self.is_bound else None,
         )
 
     def category_fields(self):

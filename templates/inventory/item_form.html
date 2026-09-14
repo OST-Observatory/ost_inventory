@@ -62,11 +62,8 @@
       </label>
     </div>
     <p class="field-hint">Add rooms and places under <a href="{% url 'inventory:locations' %}">Tools → Locations</a>. Location follows the host if this item is installed in another item.</p>
-    <label>
-      Installed in
-      {{ form.installed_in }}
-      {{ form.installed_in.errors }}
-    </label>
+    <label for="{{ form.installed_in.id_for_label }}">Installed in</label>
+    {% include "inventory/partials/item_host_picker.html" with field=form.installed_in exclude_pk=form.instance.pk %}
     <p class="field-hint">Use when this item lives inside another inventory item, e.g. a camera in a telescope.</p>
     <label>
       Container

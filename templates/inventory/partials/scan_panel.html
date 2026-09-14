@@ -1,0 +1,21 @@
+<div class="stocktake-camera">
+  <video id="{{ video_id }}" playsinline autoplay muted></video>
+  <p id="{{ status_id }}" class="muted">{{ hint }}</p>
+</div>
+<p class="actions-row">
+  <button type="button" id="{{ start_id }}">Start camera</button>
+  <button type="button" class="outline secondary" id="{{ stop_id }}" hidden>Stop camera</button>
+</p>
+<form class="toolbar" data-scan-manual data-scan-mode="{{ mode }}" data-scan-miss="{{ miss_id }}">
+  <input
+    type="search"
+    name="q"
+    placeholder="#0012 or L12"
+    autocomplete="off"
+    spellcheck="false"
+    enterkeyhint="go"
+    aria-label="Inventory or location number"
+  >
+  <button type="submit">Open</button>
+</form>
+<p id="{{ miss_id }}" class="muted" hidden>No matching item or location.</p>

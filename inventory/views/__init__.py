@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, F, OrderBy, Prefetch, Q
 from django.db.models.deletion import ProtectedError
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -18,7 +18,7 @@ from accounts.permissions import (
     user_can_write,
     write_required,
 )
-from inventory.forms import ItemForm, LoanForm, PlaceForm, RoomForm
+from inventory.forms import InstalledInForm, ItemForm, LoanForm, PlaceForm, RoomForm
 from inventory.images import process_item_photo
 from inventory.labels import (
     LABEL_CODE_SESSION_KEY,
@@ -30,7 +30,7 @@ from inventory.labels import (
 )
 from inventory.models import Category, Item, Loan, Location, Project
 from inventory.policy import visible_items
-from inventory.search import filter_items
+from inventory.search import _inventory_number_q, filter_items
 from inventory.stocktake import get_open_stocktake, record_item_scan, set_active_stocktake
 
 
@@ -148,6 +148,7 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
             self.request.session.get(LABEL_CODE_SESSION_KEY),
             get_label_size(ctx["selected_size"]),
         )
+        ctx["install_form"] = InstalledInForm(item=self.object)
         return ctx
 
 
@@ -234,6 +235,66 @@ def item_delete(request, pk):
         return redirect("inventory:item_detail", pk=pk)
     messages.warning(request, "Item permanently deleted.")
     return redirect("inventory:search")
+
+
+@write_required
+def item_host_lookup(request):
+    if request.method != "GET":
+        return HttpResponseBadRequest("GET required")
+    q = (request.GET.get("q") or "").strip()
+    if not q:
+        return JsonResponse({"results": []})
+    qs = Item.objects.filter(is_active=True).select_related("location", "location__parent")
+    raw_exclude = request.GET.get("exclude") or ""
+    if raw_exclude.isdigit():
+        skip = [int(raw_exclude)]
+        source = Item.objects.filter(pk=skip[0]).first()
+        if source:
+            skip.extend(source.installed_part_pks())
+        qs = qs.exclude(pk__in=skip)
+    qs = qs.filter(Q(name__icontains=q) | _inventory_number_q(q)).order_by("name")[:20]
+    return JsonResponse(
+        {
+            "results": [
+                {
+                    "id": item.pk,
+                    "label": f"{item.inventory_number} {item.name}",
+                    "location": item.location.path_display(),
+                }
+                for item in qs
+            ]
+        }
+    )
+
+
+@write_required
+def item_install(request, pk):
+    item = get_object_or_404(Item, pk=pk)
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required")
+    form = InstalledInForm(request.POST, item=item)
+    if not form.is_valid():
+        messages.error(request, "Could not update the host item.")
+        return redirect("inventory:item_detail", pk=pk)
+    host = form.cleaned_data.get("installed_in")
+    item.installed_in = host
+    if host:
+        item.location = host.location
+    item.updated_by = request.user
+    try:
+        item.full_clean()
+    except ValidationError as exc:
+        err = exc.message_dict.get("installed_in") if getattr(exc, "message_dict", None) else None
+        messages.error(request, err[0] if err else "Could not update the host item.")
+        return redirect("inventory:item_detail", pk=pk)
+    item.save()
+    if host:
+        messages.success(
+            request, f"Installed in {host.inventory_number} {host.name}."
+        )
+    else:
+        messages.success(request, "Removed from host item.")
+    return redirect("inventory:item_detail", pk=pk)
 
 
 @write_required
