@@ -14,8 +14,6 @@ from inventory.code128 import code128_bits
 # T50 is 203 dpi = 8 dots/mm. The print head covers 48 mm of a 50 mm tape.
 DPI = 203
 DOTS_PER_MM = 8
-TEXT_SCALE = 4
-_BW_CUTOFF = 155
 LABEL_SIZE_SESSION_KEY = "qr_label_size"
 LABEL_CODE_SESSION_KEY = "label_code_kind"
 DEFAULT_SIZE_KEY = "40x30"
@@ -154,6 +152,7 @@ def get_label_code(key: str | None, size: LabelSize | None = None) -> str:
 
 
 _PROBE = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+_PROBE.fontmode = "1"
 
 
 def _font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -284,14 +283,12 @@ def _draw_text_block(draw, lines, font, x, y, line_gap=4, fill=0, max_y=None):
 
 
 def _sharp_text_image(width: int, height: int, painter) -> Image.Image:
-    """Paint text at 4×, LANCZOS down, then snap to B/W so thermal type stays dense."""
-    s = TEXT_SCALE
-    layer = Image.new("RGB", (max(1, width) * s, max(1, height) * s), "white")
-    painter(ImageDraw.Draw(layer), s)
-    out = (max(1, width), max(1, height))
-    if layer.size != out:
-        layer = layer.resize(out, Image.Resampling.LANCZOS)
-    return layer.convert("L").point(lambda p: 0 if p < _BW_CUTOFF else 255, "L").convert("RGB")
+    """Paint hinted 1-bit type at native 203 dpi (same pixel grid as barcode bars)."""
+    layer = Image.new("RGB", (max(1, width), max(1, height)), "white")
+    draw = ImageDraw.Draw(layer)
+    draw.fontmode = "1"
+    painter(draw, 1)
+    return layer
 
 
 def render_label_png(
