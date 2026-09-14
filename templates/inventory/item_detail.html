@@ -41,7 +41,7 @@
     </form>
     {% endif %}
     {% if can_labels and item.is_active %}
-    <button type="button" data-dialog-open="qr-label-dialog">QR label</button>
+    <button type="button" data-dialog-open="qr-label-dialog">Print label</button>
     {% endif %}
     {% if can_write %}
     {% if item.is_lent %}
@@ -198,9 +198,10 @@
   <form method="post" action="{% url 'inventory:labels' %}">
     {% csrf_token %}
     <input type="hidden" name="items" value="{{ item.pk }}">
-    <h2>QR label</h2>
-    <p class="muted">Choose a tape size, then generate a PNG for the Katasymbol app.</p>
+    <h2>Print label</h2>
+    <p class="muted">Choose a tape size and QR or barcode, then generate a PNG for the Katasymbol app.</p>
     {% include "inventory/partials/label_size_picker.html" %}
+    {% include "inventory/partials/label_code_picker.html" %}
     <p class="actions-row">
       <button type="submit">Generate</button>
       <button type="button" class="outline secondary" data-dialog-close>Cancel</button>

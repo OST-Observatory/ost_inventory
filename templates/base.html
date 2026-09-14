@@ -14,7 +14,7 @@
   <script src="{% static 'app.js' %}" defer></script>
   {% block head %}{% endblock %}
 </head>
-<body>
+<body{% if user.is_authenticated %} data-scan-lookup="{% url 'inventory:scan_lookup' %}"{% endif %}>
   <nav class="container-fluid site-nav">
     <ul class="nav-brand">
       <li><strong><a href="{% url 'inventory:search' %}">OST Inventory</a></strong></li>
@@ -37,7 +37,7 @@
         {% endif %}
         {% if can_labels %}
         <li>
-          <a href="{% url 'inventory:labels' %}" {% if current_url_name == "labels" %}aria-current="page"{% endif %}>QR labels</a>
+          <a href="{% url 'inventory:labels' %}" {% if current_url_name == "labels" %}aria-current="page"{% endif %}>Labels</a>
         </li>
         {% endif %}
         <li>

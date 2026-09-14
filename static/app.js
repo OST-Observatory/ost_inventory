@@ -209,24 +209,72 @@ function bindSharePng() {
   });
 }
 
-function bindStocktakeCamera() {
-  var video = document.getElementById("stocktake-video");
-  var startBtn = document.getElementById("stocktake-camera-start");
-  var stopBtn = document.getElementById("stocktake-camera-stop");
-  if (!video || !startBtn) {
+var SCAN_FORMATS = ["qr_code", "code_128"];
+
+function scanLookupUrl() {
+  return document.body.getAttribute("data-scan-lookup") || "";
+}
+
+function lookupScannedCode(raw, onHit, onMiss) {
+  var url = scanLookupUrl();
+  if (!url) {
+    onMiss();
     return;
   }
-  if (!("BarcodeDetector" in window) || !navigator.mediaDevices) {
-    return;
+  fetch(url + "?q=" + encodeURIComponent(raw), {
+    headers: { Accept: "application/json" },
+    credentials: "same-origin",
+  })
+    .then(function (res) {
+      if (!res.ok) {
+        onMiss();
+        return null;
+      }
+      return res.json();
+    })
+    .then(function (data) {
+      if (data && (data.url || data.short_url)) {
+        onHit(data);
+      } else if (data) {
+        onMiss();
+      }
+    })
+    .catch(function () {
+      onMiss();
+    });
+}
+
+function bindVideoScanner(opts) {
+  var video = document.getElementById(opts.videoId);
+  var startBtn = document.getElementById(opts.startId);
+  var stopBtn = document.getElementById(opts.stopId);
+  var statusEl = opts.statusId ? document.getElementById(opts.statusId) : null;
+  var fallback = opts.fallbackId ? document.getElementById(opts.fallbackId) : null;
+  if (!video || !startBtn) {
+    return null;
+  }
+  if (!("BarcodeDetector" in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (statusEl) {
+      statusEl.textContent =
+        "This browser cannot scan from the camera. Type the number below, or use Chrome or Safari.";
+    }
+    return null;
   }
   startBtn.hidden = false;
+  if (fallback) {
+    fallback.hidden = true;
+  }
   var stream = null;
   var timer = null;
-  var detector = new BarcodeDetector({ formats: ["qr_code"] });
+  var detector = null;
   var going = false;
+  var lastTried = "";
+  var inflight = false;
 
   function stop() {
     going = false;
+    inflight = false;
+    lastTried = "";
     if (timer) {
       window.clearTimeout(timer);
       timer = null;
@@ -237,30 +285,44 @@ function bindStocktakeCamera() {
       });
       stream = null;
     }
+    video.srcObject = null;
     video.hidden = true;
-    stopBtn.hidden = true;
+    if (stopBtn) {
+      stopBtn.hidden = true;
+    }
     startBtn.hidden = false;
   }
 
-  function handleValue(raw) {
-    try {
-      var parsed = new URL(raw, window.location.origin);
-      if (parsed.origin !== window.location.origin) {
-        return false;
-      }
-      if (/^\/i\/\d+\/$/.test(parsed.pathname) || /^\/l\/\d+\/$/.test(parsed.pathname)) {
-        stop();
-        window.location.href = parsed.pathname;
-        return true;
-      }
-    } catch (e) {
-      return false;
+  function goTo(data) {
+    var dest = opts.mode === "stocktake" ? data.short_url || data.url : data.url || data.short_url;
+    if (!dest) {
+      inflight = false;
+      return;
     }
-    return false;
+    stop();
+    window.location.href = dest;
+  }
+
+  function handleValue(raw) {
+    raw = (raw || "").trim();
+    if (!raw || raw === lastTried || inflight) {
+      return;
+    }
+    lastTried = raw;
+    inflight = true;
+    lookupScannedCode(
+      raw,
+      function (data) {
+        goTo(data);
+      },
+      function () {
+        inflight = false;
+      }
+    );
   }
 
   function tick() {
-    if (!going || video.readyState < 2) {
+    if (!going || !detector || video.readyState < 2) {
       timer = window.setTimeout(tick, 250);
       return;
     }
@@ -269,36 +331,126 @@ function bindStocktakeCamera() {
       .then(function (codes) {
         var i;
         for (i = 0; i < codes.length; i += 1) {
-          if (handleValue(codes[i].rawValue || "")) {
-            return;
-          }
+          handleValue(codes[i].rawValue || "");
         }
-        timer = window.setTimeout(tick, 250);
+        if (going) {
+          timer = window.setTimeout(tick, 250);
+        }
       })
       .catch(function () {
-        timer = window.setTimeout(tick, 400);
+        if (going) {
+          timer = window.setTimeout(tick, 400);
+        }
+      });
+  }
+
+  function withDetector(done) {
+    if (detector) {
+      done(detector);
+      return;
+    }
+    function make(formats) {
+      detector = new BarcodeDetector({ formats: formats });
+      done(detector);
+    }
+    if (!BarcodeDetector.getSupportedFormats) {
+      make(SCAN_FORMATS);
+      return;
+    }
+    BarcodeDetector.getSupportedFormats()
+      .then(function (supported) {
+        var formats = SCAN_FORMATS.filter(function (f) {
+          return supported.indexOf(f) !== -1;
+        });
+        make(formats.length ? formats : ["qr_code"]);
+      })
+      .catch(function () {
+        make(SCAN_FORMATS);
       });
   }
 
   startBtn.addEventListener("click", function () {
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" }, audio: false })
-      .then(function (media) {
-        stream = media;
-        video.srcObject = media;
-        video.hidden = false;
-        startBtn.hidden = true;
-        stopBtn.hidden = false;
-        going = true;
-        tick();
-      })
-      .catch(function () {
-        startBtn.textContent = "Camera unavailable";
-      });
+    withDetector(function () {
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: "environment" }, audio: false })
+        .then(function (media) {
+          stream = media;
+          video.srcObject = media;
+          video.hidden = false;
+          startBtn.hidden = true;
+          if (stopBtn) {
+            stopBtn.hidden = false;
+          }
+          going = true;
+          tick();
+        })
+        .catch(function () {
+          startBtn.textContent = "Camera unavailable";
+        });
+    });
   });
   if (stopBtn) {
     stopBtn.addEventListener("click", stop);
   }
+  if (opts.dialog) {
+    opts.dialog.addEventListener("close", stop);
+  }
+  return stop;
+}
+
+function bindLabelScanners() {
+  bindVideoScanner({
+    videoId: "stocktake-video",
+    startId: "stocktake-camera-start",
+    stopId: "stocktake-camera-stop",
+    fallbackId: "stocktake-camera-fallback",
+    mode: "stocktake",
+  });
+  var dialog = document.getElementById("scan-lookup-dialog");
+  bindVideoScanner({
+    videoId: "scan-lookup-video",
+    startId: "scan-lookup-start",
+    stopId: "scan-lookup-stop",
+    statusId: "scan-lookup-status",
+    mode: "lookup",
+    dialog: dialog,
+  });
+}
+
+function bindManualScan() {
+  document.addEventListener("submit", function (event) {
+    var form = event.target.closest("[data-scan-manual]");
+    if (!form) {
+      return;
+    }
+    event.preventDefault();
+    var input = form.querySelector("input[name='q']");
+    var miss = document.getElementById(form.getAttribute("data-scan-miss") || "");
+    var raw = input ? input.value.trim() : "";
+    if (miss) {
+      miss.hidden = true;
+    }
+    if (!raw) {
+      return;
+    }
+    lookupScannedCode(
+      raw,
+      function (data) {
+        var dest =
+          form.getAttribute("data-scan-mode") === "stocktake"
+            ? data.short_url || data.url
+            : data.url || data.short_url;
+        if (dest) {
+          window.location.href = dest;
+        }
+      },
+      function () {
+        if (miss) {
+          miss.hidden = false;
+        }
+      }
+    );
+  });
 }
 
 function bindDialogs() {
@@ -356,7 +508,8 @@ function bindUi() {
   bindNavDrawer();
   bindRoomPlaceSelects();
   bindSharePng();
-  bindStocktakeCamera();
+  bindLabelScanners();
+  bindManualScan();
   bindDialogs();
   bindPhotoCapture();
 }

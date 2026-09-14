@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}QR labels — OST Inventory{% endblock %}
+{% block title %}Labels — OST Inventory{% endblock %}
 {% block content %}
-<h1>QR labels</h1>
-<p class="muted">Select items and locations, choose a tape size, then generate PNGs for the Katasymbol app. ODS is data only — pick the same size in the app.</p>
+<h1>Labels</h1>
+<p class="muted">Select items and locations, choose a tape size and QR or barcode, then generate PNGs for the Katasymbol app. ODS is data only — pick the same size in the app.</p>
 
 <form method="post" id="label-form">
   {% csrf_token %}
@@ -14,6 +14,8 @@
   <section class="block-card label-size-card">
     <h2>Label size</h2>
     {% include "inventory/partials/label_size_picker.html" %}
+    <h2>Code</h2>
+    {% include "inventory/partials/label_code_picker.html" %}
   </section>
 
   <div class="form-grid">

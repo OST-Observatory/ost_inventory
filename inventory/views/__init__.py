@@ -20,7 +20,14 @@ from accounts.permissions import (
 )
 from inventory.forms import ItemForm, LoanForm, PlaceForm, RoomForm
 from inventory.images import process_item_photo
-from inventory.labels import LABEL_SIZE_LIST, LABEL_SIZE_SESSION_KEY, DEFAULT_SIZE_KEY
+from inventory.labels import (
+    LABEL_CODE_SESSION_KEY,
+    LABEL_SIZE_LIST,
+    LABEL_SIZE_SESSION_KEY,
+    DEFAULT_SIZE_KEY,
+    get_label_code,
+    get_label_size,
+)
 from inventory.models import Category, Item, Loan, Location, Project
 from inventory.policy import visible_items
 from inventory.search import filter_items
@@ -136,6 +143,10 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
         ctx["label_sizes"] = LABEL_SIZE_LIST
         ctx["selected_size"] = self.request.session.get(
             LABEL_SIZE_SESSION_KEY, DEFAULT_SIZE_KEY
+        )
+        ctx["selected_code"] = get_label_code(
+            self.request.session.get(LABEL_CODE_SESSION_KEY),
+            get_label_size(ctx["selected_size"]),
         )
         return ctx
 

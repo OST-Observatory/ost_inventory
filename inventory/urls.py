@@ -29,6 +29,7 @@ from inventory.views.extras import (
     labels_page,
     labels_png,
     labels_zip,
+    scan_lookup,
 )
 from inventory.views.stocktake import (
     stocktake_detail,
@@ -78,4 +79,5 @@ urlpatterns = [
     path("labels/zip/", labels_zip, name="labels_zip"),
     path("labels/ods/", labels_ods, name="labels_ods"),
     path("labels/png/", labels_png, name="labels_png"),
+    path("scan/lookup/", scan_lookup, name="scan_lookup"),
 ]

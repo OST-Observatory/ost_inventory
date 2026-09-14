@@ -6,7 +6,7 @@ import zipfile
 from django.conf import settings
 from django.contrib import messages
 from django.core.management.base import CommandError
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods
@@ -14,8 +14,10 @@ from django.views.decorators.http import require_GET, require_http_methods
 from accounts.permissions import import_required, labels_required, read_required, user_can_see_inactive
 from inventory.csv_utils import sanitize_csv_cell
 from inventory.labels import (
+    LABEL_CODE_SESSION_KEY,
     LABEL_SIZE_LIST,
     LABEL_SIZE_SESSION_KEY,
+    get_label_code,
     get_label_size,
     png_filename,
     render_label_png,
@@ -23,6 +25,7 @@ from inventory.labels import (
 from inventory.models import Item, Location
 from inventory.ods import spreadsheet_bytes
 from inventory.policy import visible_items
+from inventory.scan import resolve_scan_target
 from inventory.search import filter_items
 
 
@@ -32,7 +35,9 @@ def _absolute_url(request, path: str) -> str:
 
 def _selected_label_jobs(request):
     size = get_label_size(request.POST.get("label_size") or request.GET.get("size"))
+    code = get_label_code(request.POST.get("label_code") or request.GET.get("code"), size)
     request.session[LABEL_SIZE_SESSION_KEY] = size.key
+    request.session[LABEL_CODE_SESSION_KEY] = code
     item_ids = request.POST.getlist("items") or request.GET.getlist("items")
     loc_ids = request.POST.getlist("locations") or request.GET.getlist("locations")
     items = list(
@@ -45,7 +50,13 @@ def _selected_label_jobs(request):
     for item in items:
         url = _absolute_url(request, reverse("item_short", kwargs={"pk": item.pk}))
         png = render_label_png(
-            url, item.name, item.inventory_number, item.location.path_display(), size
+            url,
+            item.name,
+            item.inventory_number,
+            item.location.path_display(),
+            size,
+            code=code,
+            barcode_data=item.inventory_number,
         )
         jobs.append(
             {
@@ -55,14 +66,22 @@ def _selected_label_jobs(request):
                 "subtitle": item.inventory_number,
                 "extra": item.location.path_display(),
                 "url": url,
-                "filename": png_filename(f"item-{item.pk:04d}", size),
+                "filename": png_filename(f"item-{item.pk:04d}", size, code),
                 "png": png,
             }
         )
     for loc in locations:
         url = _absolute_url(request, reverse("location_short", kwargs={"pk": loc.pk}))
         path = loc.path_display()
-        png = render_label_png(url, loc.name, path, "", size)
+        png = render_label_png(
+            url,
+            loc.name,
+            path,
+            "",
+            size,
+            code=code,
+            barcode_data=f"L{loc.pk}",
+        )
         jobs.append(
             {
                 "kind": "location",
@@ -71,11 +90,11 @@ def _selected_label_jobs(request):
                 "subtitle": path,
                 "extra": "",
                 "url": url,
-                "filename": png_filename(f"loc-{loc.pk}", size),
+                "filename": png_filename(f"loc-{loc.pk}", size, code),
                 "png": png,
             }
         )
-    return size, jobs
+    return size, code, jobs
 
 
 def _labels_form_context(request, extra=None):
@@ -84,6 +103,8 @@ def _labels_form_context(request, extra=None):
         "locations": Location.objects.select_related("parent").order_by("name"),
         "label_sizes": LABEL_SIZE_LIST,
         "selected_size": request.session.get(LABEL_SIZE_SESSION_KEY, "40x30"),
+        "selected_code": request.session.get(LABEL_CODE_SESSION_KEY)
+        or get_label_size(request.session.get(LABEL_SIZE_SESSION_KEY, "40x30")).default_code,
     }
     if extra:
         ctx.update(extra)
@@ -155,7 +176,7 @@ def export_csv(request):
 def labels_page(request):
     if request.method == "GET":
         return render(request, "inventory/labels.html", _labels_form_context(request))
-    size, jobs = _selected_label_jobs(request)
+    size, code, jobs = _selected_label_jobs(request)
     if not jobs:
         messages.error(request, "Select at least one item or location.")
         return render(request, "inventory/labels.html", _labels_form_context(request))
@@ -172,6 +193,7 @@ def labels_page(request):
         "inventory/labels_preview.html",
         {
             "size": size,
+            "code": code,
             "labels": previews,
             "item_ids": request.POST.getlist("items"),
             "location_ids": request.POST.getlist("locations"),
@@ -182,7 +204,7 @@ def labels_page(request):
 @labels_required
 @require_http_methods(["GET", "POST"])
 def labels_zip(request):
-    _size, jobs = _selected_label_jobs(request)
+    _size, _code, jobs = _selected_label_jobs(request)
     if not jobs:
         return HttpResponseBadRequest("Select at least one item or location.")
     buf = io.BytesIO()
@@ -198,11 +220,15 @@ def labels_zip(request):
 @labels_required
 @require_http_methods(["GET", "POST"])
 def labels_ods(request):
-    size, jobs = _selected_label_jobs(request)
+    size, code, jobs = _selected_label_jobs(request)
     if not jobs:
         return HttpResponseBadRequest("Select at least one item or location.")
-    rows = [[job["url"], job["title"], job["subtitle"], size.key] for job in jobs]
-    payload = spreadsheet_bytes(["qr_url", "title", "subtitle", "label_size"], rows)
+    rows = [
+        [job["url"], job["title"], job["subtitle"], size.key, code] for job in jobs
+    ]
+    payload = spreadsheet_bytes(
+        ["qr_url", "title", "subtitle", "label_size", "code"], rows
+    )
     response = HttpResponse(
         payload,
         content_type="application/vnd.oasis.opendocument.spreadsheet",
@@ -215,6 +241,7 @@ def labels_ods(request):
 @require_GET
 def labels_png(request):
     size = get_label_size(request.GET.get("size"))
+    code = get_label_code(request.GET.get("code"), size)
     kind = request.GET.get("kind")
     pk = request.GET.get("id")
     try:
@@ -225,19 +252,36 @@ def labels_png(request):
         item = get_object_or_404(Item, pk=pk, is_active=True)
         url = _absolute_url(request, reverse("item_short", kwargs={"pk": item.pk}))
         png = render_label_png(
-            url, item.name, item.inventory_number, item.location.path_display(), size
+            url,
+            item.name,
+            item.inventory_number,
+            item.location.path_display(),
+            size,
+            code=code,
+            barcode_data=item.inventory_number,
         )
-        filename = png_filename(f"item-{item.pk:04d}", size)
+        filename = png_filename(f"item-{item.pk:04d}", size, code)
     elif kind == "location":
         loc = get_object_or_404(Location, pk=pk)
         url = _absolute_url(request, reverse("location_short", kwargs={"pk": loc.pk}))
-        png = render_label_png(url, loc.name, loc.path_display(), "", size)
-        filename = png_filename(f"loc-{loc.pk}", size)
+        png = render_label_png(
+            url, loc.name, loc.path_display(), "", size, code=code, barcode_data=f"L{loc.pk}"
+        )
+        filename = png_filename(f"loc-{loc.pk}", size, code)
     else:
         return HttpResponseBadRequest("Invalid kind.")
     response = HttpResponse(png, content_type="image/png")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
+
+
+@read_required
+@require_GET
+def scan_lookup(request):
+    found = resolve_scan_target(request.GET.get("q", ""), request.user)
+    if not found:
+        return JsonResponse({"error": "not found"}, status=404)
+    return JsonResponse(found)
 
 
 def _csv_text_from_request(request) -> str:

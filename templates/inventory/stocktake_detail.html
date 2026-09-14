@@ -18,14 +18,24 @@
     {% if stocktake.current_location %}
       <strong>{{ stocktake.current_location.path_display }}</strong>
     {% else %}
-      <span class="muted">Scan a location QR first</span>
+      <span class="muted">Scan a location label first</span>
     {% endif %}
   </p>
   <div class="stocktake-camera">
     <video id="stocktake-video" playsinline autoplay muted hidden></video>
-    <p id="stocktake-camera-fallback" class="muted">Use the phone camera app on a QR label, or start the scanner below if this browser supports it.</p>
+    <p id="stocktake-camera-fallback" class="muted">Use the phone camera app on a QR label, or type a barcode number below. Chrome and Safari can also start the live scanner.</p>
     <button type="button" class="secondary" id="stocktake-camera-start" hidden>Start camera</button>
     <button type="button" class="outline secondary" id="stocktake-camera-stop" hidden>Stop camera</button>
+    <form data-scan-manual data-scan-mode="stocktake" data-scan-miss="stocktake-scan-miss">
+      <label>
+        Or type the number
+        <input type="text" name="q" placeholder="#0012 or L12" autocomplete="off">
+      </label>
+      <p id="stocktake-scan-miss" class="muted" hidden>No matching item or location.</p>
+      <p class="actions-row">
+        <button type="submit" class="secondary">Open</button>
+      </p>
+    </form>
   </div>
   <form method="post" action="{% url 'inventory:stocktake_finish' stocktake.pk %}" class="inline js-confirm" data-confirm="Finish this stocktake?">
     {% csrf_token %}

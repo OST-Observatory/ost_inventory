@@ -1,0 +1,12 @@
+<div class="label-code-grid">
+  <label class="label-size-option">
+    <input type="radio" class="visually-hidden" name="label_code" value="qr" {% if selected_code != "barcode" %}checked{% endif %}>
+    <strong>QR code</strong>
+    <span class="muted">Link to the item or location page. Best on 40×30 and 50×80.</span>
+  </label>
+  <label class="label-size-option">
+    <input type="radio" class="visually-hidden" name="label_code" value="barcode" {% if selected_code == "barcode" %}checked{% endif %}>
+    <strong>Barcode</strong>
+    <span class="muted">Code 128 of the inventory number. Best on 40×20, 30×20, and cable flags.</span>
+  </label>
+</div>

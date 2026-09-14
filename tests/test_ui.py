@@ -39,7 +39,7 @@ class UiNavTests(TestCase):
         self.assertNotContains(resp, "Add item")
         self.assertNotContains(resp, "Import")
         self.assertNotContains(resp, "Stocktake")
-        self.assertNotContains(resp, "QR labels")
+        self.assertNotContains(resp, ">Labels</a>")
         self.assertContains(resp, "Loan history")
         self.assertContains(resp, "On loan")
         self.assertContains(resp, "Not seen")
@@ -50,11 +50,11 @@ class UiNavTests(TestCase):
         resp = self.client.get(reverse("inventory:search"))
         html = resp.content.decode()
         self.assertContains(resp, "Add item")
-        self.assertContains(resp, "QR labels")
+        self.assertContains(resp, ">Labels</a>")
         self.assertContains(resp, "Stocktake")
         self.assertContains(resp, "Import")
         add_pos = html.index("Add item")
-        labels_pos = html.index("QR labels")
+        labels_pos = html.index(">Labels</a>")
         tools_pos = html.index("Tools")
         self.assertLess(add_pos, tools_pos)
         self.assertLess(labels_pos, tools_pos)
@@ -63,7 +63,7 @@ class UiNavTests(TestCase):
         self.assertIn("Not seen", panel)
         self.assertIn("Stocktake", panel)
         self.assertNotIn("Add item", panel)
-        self.assertNotIn("QR labels", panel)
+        self.assertNotIn(">Labels</a>", panel)
 
     def test_overdue_badge_count(self):
         self.client.login(username="reader", password="x")
@@ -168,6 +168,8 @@ class LabelsUiTests(TestCase):
         self.assertContains(resp, "data-select-visible")
         self.assertContains(resp, "data-filter-text")
         self.assertContains(resp, "label_size")
+        self.assertContains(resp, "label_code")
+        self.assertContains(resp, "Barcode")
         self.assertContains(resp, "Generate labels")
         self.assertContains(resp, "Cable flag")
         self.assertContains(resp, "label-sil")
@@ -198,8 +200,10 @@ class LabelsUiTests(TestCase):
 
     def test_item_detail_qr_dialog(self):
         resp = self.client.get(reverse("inventory:item_detail", args=[self.item.pk]))
-        self.assertContains(resp, "QR label")
+        self.assertContains(resp, "Print label")
         self.assertContains(resp, "qr-label-dialog")
+        self.assertContains(resp, "label_code")
+        self.assertContains(resp, "Barcode")
         self.assertContains(resp, "label-sil-40x30")
         self.assertContains(resp, "Take photo")
         self.assertContains(resp, 'capture="environment"')
@@ -224,6 +228,26 @@ class LabelsUiTests(TestCase):
         self.assertIn("opendocument.spreadsheet", ods["Content-Type"])
         self.assertTrue(ods.content.startswith(b"PK"))
         self.assertIn(b"content.xml", ods.content)
+
+    def test_search_has_scan_dialog(self):
+        resp = self.client.get(reverse("inventory:search"))
+        self.assertContains(resp, "Scan label")
+        self.assertContains(resp, "scan-lookup-dialog")
+        self.assertContains(resp, reverse("inventory:scan_lookup"))
+
+    def test_compact_defaults_to_barcode_preview(self):
+        resp = self.client.post(
+            reverse("inventory:labels"),
+            {"items": [str(self.item.pk)], "label_size": "30x20"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Barcode")
+        png = self.client.get(
+            reverse("inventory:labels_png"),
+            {"kind": "item", "id": self.item.pk, "size": "30x20", "code": "barcode"},
+        )
+        self.assertEqual(png.status_code, 200)
+        self.assertIn("barcode", png.get("Content-Disposition", ""))
 
 
 class CsvImportPageTests(TestCase):
@@ -279,6 +303,7 @@ class SubpathUrlTests(TestCase):
             self.assertEqual(reverse("inventory:search"), "/inventory/")
             self.assertEqual(reverse("login"), "/inventory/login/")
             self.assertEqual(reverse("accounts:access"), "/inventory/access/")
+            self.assertEqual(reverse("inventory:scan_lookup"), "/inventory/scan/lookup/")
             self.assertEqual(reverse("item_short", args=[4]), "/inventory/i/4/")
             self.assertEqual(
                 reverse("protected_media", kwargs={"path": "items/cam.jpg"}),

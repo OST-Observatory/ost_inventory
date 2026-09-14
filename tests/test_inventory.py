@@ -9,9 +9,12 @@ from django.urls import reverse
 from PIL import Image
 
 from accounts.permissions import user_can_admin, user_can_read, user_can_write
+from inventory.code128 import code128_bits
 from inventory.labels import (
     CABLE_FLAG_MM,
     CABLE_TAB_MM,
+    CODE_BARCODE,
+    CODE_QR,
     DPI,
     LABEL_SIZES,
     MARGIN_COMPACT_MM,
@@ -569,6 +572,93 @@ class LabelPngTests(TestCase):
             if img.getpixel((min(text_x, img.size[0] - 1), y))[0] < 128
         )
         self.assertGreater(text_blacks, 10)
+
+    def test_code128_is_deterministic_and_rejects_non_ascii(self):
+        self.assertEqual(code128_bits("#0001"), code128_bits("#0001"))
+        self.assertGreater(len(code128_bits("#0001")), 20)
+        with self.assertRaises(ValueError):
+            code128_bits("ä")
+
+    def test_compact_and_cable_default_to_barcode(self):
+        self.assertEqual(LABEL_SIZES["30x20"].default_code, CODE_BARCODE)
+        self.assertEqual(LABEL_SIZES["40x20"].default_code, CODE_BARCODE)
+        self.assertEqual(LABEL_SIZES["cable-flag"].default_code, CODE_BARCODE)
+        self.assertEqual(LABEL_SIZES["40x30"].default_code, CODE_QR)
+        self.assertEqual(LABEL_SIZES["50x80"].default_code, CODE_QR)
+
+    def test_barcode_presets_match_pixel_size(self):
+        for size in LABEL_SIZES.values():
+            png = render_label_png(
+                "http://testserver/i/1/",
+                "Camera body",
+                "#0001",
+                "Observatory / Box A",
+                size,
+                code=CODE_BARCODE,
+                barcode_data="#0001",
+            )
+            img = Image.open(BytesIO(png))
+            self.assertEqual(
+                img.size,
+                (size.width_px, size.height_px),
+                msg=size.key,
+            )
+
+
+class ScanLookupTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="writer", password="x", is_supervisor=True
+        )
+        self.reader = User.objects.create_user(
+            username="reader", password="x", is_student=True
+        )
+        self.room = Location.objects.create(name="Lab")
+        self.item = Item.objects.create(
+            name="Scope", location=self.room, created_by=self.user, updated_by=self.user
+        )
+        self.client = Client()
+
+    def _lookup(self, q):
+        return self.client.get(reverse("inventory:scan_lookup"), {"q": q})
+
+    def test_anonymous_is_redirected(self):
+        resp = self._lookup("#0001")
+        self.assertEqual(resp.status_code, 302)
+
+    def test_inventory_number_and_qr_path(self):
+        self.client.login(username="writer", password="x")
+        for q in (
+            self.item.inventory_number,
+            str(self.item.pk),
+            f"]C1{self.item.inventory_number}",
+            f"https://example.edu/inventory/i/{self.item.pk}/",
+        ):
+            resp = self._lookup(q)
+            self.assertEqual(resp.status_code, 200, q)
+            data = resp.json()
+            self.assertEqual(data["kind"], "item")
+            self.assertEqual(data["url"], reverse("inventory:item_detail", args=[self.item.pk]))
+            self.assertEqual(data["short_url"], reverse("item_short", args=[self.item.pk]))
+
+    def test_location_code(self):
+        self.client.login(username="writer", password="x")
+        resp = self._lookup(f"L{self.room.pk}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["kind"], "location")
+        self.assertEqual(data["url"], reverse("inventory:location_detail", args=[self.room.pk]))
+        self.assertEqual(data["short_url"], reverse("location_short", args=[self.room.pk]))
+
+    def test_unknown_is_404(self):
+        self.client.login(username="writer", password="x")
+        resp = self._lookup("no-such-label")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_reader_can_lookup(self):
+        self.client.login(username="reader", password="x")
+        resp = self._lookup(self.item.inventory_number)
+        self.assertEqual(resp.status_code, 200)
 
 
 class StocktakeFlowTests(TestCase):

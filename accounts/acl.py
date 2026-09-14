@@ -17,7 +17,7 @@ CAPABILITIES = (
     (LOAN_PII, "See borrower name and contact"),
     (INACTIVE, "See inactive items"),
     (IMPORT, "Import CSV"),
-    (LABELS, "QR labels"),
+    (LABELS, "Labels"),
     (DELETE, "Permanently delete items"),
     (MANAGE_ACL, "Manage access and groups"),
 )

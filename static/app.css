@@ -489,7 +489,8 @@ form.block-card > button,
 }
 .ost-dialog h2 { margin: 0 0 0.35rem; }
 .ost-dialog > form > .muted { margin: 0 0 0.9rem; }
-.ost-dialog .label-size-grid { margin-bottom: 1rem; }
+.ost-dialog .label-size-grid,
+.ost-dialog .label-code-grid { margin-bottom: 1rem; }
 .ost-dialog .actions-row { margin: 0; }
 
 .detail-grid {
@@ -870,10 +871,15 @@ form.add-inline > button {
 }
 
 .label-size-card h2 { margin-bottom: 0.75rem; }
-.label-size-grid {
+.label-size-card h2:not(:first-child) { margin-top: 1.15rem; }
+.label-size-grid,
+.label-code-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: 0.65rem;
+}
+.label-code-grid {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
 }
 .label-size-option {
   display: flex;
@@ -979,7 +985,8 @@ form.add-inline > button {
   padding: 0.35rem 0.7rem;
   font-size: 0.85rem;
 }
-.stocktake-scan-card video {
+.stocktake-scan-card video,
+.stocktake-camera video {
   width: min(100%, 22rem);
   border-radius: 0.4rem;
   background: #111;

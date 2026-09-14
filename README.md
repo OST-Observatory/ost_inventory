@@ -1,7 +1,7 @@
 # OST Inventory
 
 Web inventory for an observatory or astronomy institute: find equipment, record
-where it lives, lend it out, print QR labels, and run a stocktake from a phone.
+where it lives, lend it out, print QR or barcode labels, and run a stocktake from a phone.
 
 The interface is English. Everyone who uses the site must sign in. Photos are
 never served as public files; they go through the app after a permission check.
@@ -22,8 +22,12 @@ are re-encoded and stored under UUID names.
 Borrower name and contact are hidden unless the user has that permission.
 Overdue reminders can be sent daily.
 - **Locations** — rooms and places, with a per-location item list.
-- **QR labels** — PNG, ZIP, and ODS for T50-style sizes (50×80, 40×30, 40×20,
-30×20 mm, plus a cable flag). Print from the label printer’s own app.
+- **Labels** — PNG, ZIP, and ODS for T50-style sizes (50×80, 40×30, 40×20,
+30×20 mm, plus a cable flag). Choose a **QR code** (short `/i/<id>/` or
+`/l/<id>/` URL) or a **Code 128 barcode** of the inventory number (`#0012`, or
+`L12` for a location). Compact tapes default to barcode. Print from the label
+printer’s own app. On **Search**, **Scan label** opens the camera (Chrome/Safari)
+or a number field and jumps to the matching item or location.
 - **Stocktake** — a dated physical count (separate from **Still here** / not
 seen recently).
 - **CSV** — import (preview, then commit) and export. Matching on import is
@@ -148,7 +152,7 @@ capabilities (**Admin → Access control**), not hard-coded beyond the defaults:
 | Group        | Default rights                                                   |
 | ------------ | ---------------------------------------------------------------- |
 | `student`    | Read (no borrower name/contact, no inactive items)               |
-| `supervisor` | Read, write, borrower PII, inactive items, CSV import, QR labels |
+| `supervisor` | Read, write, borrower PII, inactive items, CSV import, labels |
 | `staff`      | Supervisor rights, permanent delete, access-control UI           |
 | Superuser    | All capabilities                                                 |
 
@@ -491,7 +495,7 @@ a TCP bind on the network.
 1. `https://inventory.example.edu/login/` (HTTP should redirect to HTTPS).
 2. Sign in (LDAP or local superuser).
 3. Open search, add a room under **Tools → Locations**, add an item, take or
-  upload a photo, generate a QR PNG, scan `/i/<id>/`.
+  upload a photo, generate a QR or barcode PNG, scan `/i/<id>/` or `#0001`.
 4. `journalctl -u ost-inventory -e` for errors.
 5. Confirm static CSS loads (`/static/…`) and that a photo URL
   requires login.

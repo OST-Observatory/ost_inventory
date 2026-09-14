@@ -13,7 +13,7 @@ CSP = (
     "form-action 'self'"
 )
 
-PERMISSIONS_POLICY = "camera=(), geolocation=(), microphone=(), payment=()"
+PERMISSIONS_POLICY = "camera=(self), geolocation=(), microphone=(), payment=()"
 
 
 class SecurityHeadersMiddleware:

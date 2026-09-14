@@ -1,4 +1,4 @@
-"""T50-oriented QR label PNGs (203 dpi, black on white)."""
+"""T50-oriented QR and Code 128 label PNGs (203 dpi, black on white)."""
 
 from __future__ import annotations
 
@@ -9,13 +9,18 @@ from pathlib import Path
 import segno
 from PIL import Image, ImageDraw, ImageFont
 
+from inventory.code128 import code128_bits
+
 # T50 is 203 dpi = 8 dots/mm. The print head covers 48 mm of a 50 mm tape.
 DPI = 203
 DOTS_PER_MM = 8
 TEXT_SCALE = 4
 _BW_CUTOFF = 155
 LABEL_SIZE_SESSION_KEY = "qr_label_size"
+LABEL_CODE_SESSION_KEY = "label_code_kind"
 DEFAULT_SIZE_KEY = "40x30"
+CODE_QR = "qr"
+CODE_BARCODE = "barcode"
 
 _FONT_REGULAR = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
 _FONT_BOLD = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
@@ -55,6 +60,10 @@ class LabelSize:
         return mm_to_px(self.height_mm)
 
     @property
+    def default_code(self) -> str:
+        return CODE_BARCODE if self.layout in {"compact", "cable"} else CODE_QR
+
+    @property
     def sil_box_style(self) -> str:
         """Picker size at the shared mm scale (must match app.css; no inline styles)."""
         w, h = sil_rem(self.width_mm, self.height_mm)
@@ -81,7 +90,7 @@ LABEL_SIZES: dict[str, LabelSize] = {
     "40x20": LabelSize(
         "40x20",
         "40 × 20 mm",
-        "Compact: QR and number",
+        "Compact: barcode recommended",
         "compact",
         40,
         20,
@@ -89,7 +98,7 @@ LABEL_SIZES: dict[str, LabelSize] = {
     "30x20": LabelSize(
         "30x20",
         "30 × 20 mm",
-        "Small parts: QR and number",
+        "Small parts: barcode recommended",
         "compact",
         30,
         20,
@@ -97,7 +106,7 @@ LABEL_SIZES: dict[str, LabelSize] = {
     "cable-flag": LabelSize(
         "cable-flag",
         "Cable flag",
-        "45 × 30 mm fold (two 45 × 15 mm faces) + 35 × 7 mm wrap",
+        "45 × 30 mm fold + wrap; barcode recommended",
         "cable",
         80,
         30,
@@ -134,6 +143,14 @@ def get_label_size(key: str | None) -> LabelSize:
     if key and key in LABEL_SIZES:
         return LABEL_SIZES[key]
     return LABEL_SIZES[DEFAULT_SIZE_KEY]
+
+
+def get_label_code(key: str | None, size: LabelSize | None = None) -> str:
+    if key in {CODE_QR, CODE_BARCODE}:
+        return key
+    if size is not None:
+        return size.default_code
+    return CODE_QR
 
 
 _PROBE = ImageDraw.Draw(Image.new("RGB", (1, 1)))
@@ -229,6 +246,33 @@ def _paste_qr(canvas: Image.Image, url: str, box: int, xy: tuple[int, int]) -> N
     canvas.paste(_qr(url, box), xy)
 
 
+def _barcode_image(data: str, width: int, height: int) -> Image.Image:
+    bits = code128_bits(data or "0")
+    quiet = 10
+    modules = quiet * 2 + len(bits)
+    module_px = max(1, width // modules)
+    bar_w = module_px * modules
+    img = Image.new("RGB", (max(width, bar_w), max(1, height)), "white")
+    draw = ImageDraw.Draw(img)
+    x = (img.size[0] - bar_w) // 2 + quiet * module_px
+    y1 = img.size[1] - 1
+    for bit in bits:
+        if bit == "1":
+            draw.rectangle((x, 0, x + module_px - 1, y1), fill=0)
+        x += module_px
+    if img.size[0] > width:
+        left = (img.size[0] - width) // 2
+        img = img.crop((left, 0, left + width, img.size[1]))
+    return img
+
+
+def _paste_barcode(canvas: Image.Image, data: str, box: tuple[int, int, int, int]) -> None:
+    x, y, w, h = box
+    if w < 8 or h < 4:
+        return
+    canvas.paste(_barcode_image(data, w, h), (x, y))
+
+
 def _draw_text_block(draw, lines, font, x, y, line_gap=4, fill=0, max_y=None):
     for line in lines:
         bbox = draw.textbbox((x, y), line, font=font)
@@ -250,26 +294,44 @@ def _sharp_text_image(width: int, height: int, painter) -> Image.Image:
     return layer.convert("L").point(lambda p: 0 if p < _BW_CUTOFF else 255, "L").convert("RGB")
 
 
-def render_label_png(url: str, title: str, subtitle: str, extra: str, size: LabelSize) -> bytes:
+def render_label_png(
+    url: str,
+    title: str,
+    subtitle: str,
+    extra: str,
+    size: LabelSize,
+    *,
+    code: str = CODE_QR,
+    barcode_data: str = "",
+) -> bytes:
+    code = get_label_code(code, size)
+    payload = barcode_data or subtitle or title
     if size.layout == "cable":
-        img = _render_cable(url, title, subtitle)
+        img = _render_cable(url, title, subtitle, code=code, barcode_data=payload)
     elif size.layout == "large":
-        img = _render_large(url, title, subtitle, extra, size)
+        img = _render_large(url, title, subtitle, extra, size, code=code, barcode_data=payload)
     elif size.layout == "medium":
-        img = _render_medium(url, title, subtitle, size)
+        img = _render_medium(url, title, subtitle, size, code=code, barcode_data=payload)
     else:
-        img = _render_compact(url, title, subtitle, size)
+        img = _render_compact(url, title, subtitle, size, code=code, barcode_data=payload)
     buf = BytesIO()
     img.save(buf, format="PNG", dpi=(DPI, DPI), optimize=True)
     return buf.getvalue()
 
 
-def _render_large(url, title, subtitle, extra, size: LabelSize) -> Image.Image:
+def _render_large(url, title, subtitle, extra, size: LabelSize, *, code, barcode_data) -> Image.Image:
     img = Image.new("RGB", (size.width_px, size.height_px), "white")
     pad = mm_to_px(MARGIN_LARGE_MM)
-    qr_box = min(size.width_px - 2 * pad, mm_to_px(36))
-    _paste_qr(img, url, qr_box, ((size.width_px - qr_box) // 2, pad))
-    text_y = pad + qr_box + mm_to_px(2)
+    if code == CODE_BARCODE:
+        bar_h = min(mm_to_px(14), size.height_px // 4)
+        _paste_barcode(
+            img, barcode_data, (pad, pad, size.width_px - 2 * pad, bar_h)
+        )
+        text_y = pad + bar_h + mm_to_px(2)
+    else:
+        qr_box = min(size.width_px - 2 * pad, mm_to_px(36))
+        _paste_qr(img, url, qr_box, ((size.width_px - qr_box) // 2, pad))
+        text_y = pad + qr_box + mm_to_px(2)
     text_h = size.height_px - pad - text_y
     text_w = size.width_px - 2 * pad
     if text_w > 4 and text_h > 4:
@@ -332,10 +394,29 @@ def _paint_stacked_text(
         )
 
 
-def _render_medium(url, title, subtitle, size: LabelSize) -> Image.Image:
-    """QR uses the full printable height; number + name sit beside it, rotated 180°."""
+def _render_medium(url, title, subtitle, size: LabelSize, *, code, barcode_data) -> Image.Image:
+    """QR uses the full printable height; barcode uses the full printable width."""
     img = Image.new("RGB", (size.width_px, size.height_px), "white")
     pad = mm_to_px(MARGIN_MEDIUM_MM)
+    if code == CODE_BARCODE:
+        inner_w = size.width_px - 2 * pad
+        inner_h = size.height_px - 2 * pad
+        bar_h = max(mm_to_px(8), int(inner_h * 0.42))
+        _paste_barcode(img, barcode_data, (pad, pad, inner_w, bar_h))
+        text_y = pad + bar_h + mm_to_px(1.2)
+        text_h = size.height_px - pad - text_y
+        if inner_w > 4 and text_h > 4:
+            img.paste(
+                _sharp_text_image(
+                    inner_w,
+                    text_h,
+                    lambda draw, s: _paint_number_name(
+                        draw, s, inner_w, text_h, title, subtitle, 18, 14
+                    ),
+                ),
+                (pad, text_y),
+            )
+        return img
     qr_box = size.height_px - 2 * pad
     gap = mm_to_px(2.0)
     _paste_qr(img, url, qr_box, (pad, pad))
@@ -380,9 +461,28 @@ def _paint_medium_spine(draw, s, width, height, title, subtitle):
         draw.text((inset, y), number, font=num_font, fill=0)
 
 
-def _render_compact(url, title, subtitle, size: LabelSize) -> Image.Image:
+def _render_compact(url, title, subtitle, size: LabelSize, *, code, barcode_data) -> Image.Image:
     img = Image.new("RGB", (size.width_px, size.height_px), "white")
     pad = mm_to_px(MARGIN_COMPACT_MM)
+    if code == CODE_BARCODE:
+        inner_w = size.width_px - 2 * pad
+        inner_h = size.height_px - 2 * pad
+        bar_h = max(mm_to_px(6), int(inner_h * 0.52))
+        _paste_barcode(img, barcode_data, (pad, pad, inner_w, bar_h))
+        text_y = pad + bar_h + mm_to_px(0.8)
+        text_h = size.height_px - pad - text_y
+        if inner_w > 4 and text_h > 4:
+            img.paste(
+                _sharp_text_image(
+                    inner_w,
+                    text_h,
+                    lambda draw, s: _paint_number_name(
+                        draw, s, inner_w, text_h, title, subtitle, 14, 11
+                    ),
+                ),
+                (pad, text_y),
+            )
+        return img
     qr_box = size.height_px - 2 * pad
     _paste_qr(img, url, qr_box, (pad, pad))
     x = pad + qr_box + mm_to_px(1.5)
@@ -421,13 +521,15 @@ def _paint_number_name(draw, s, width, height, title, subtitle, num_px, name_px)
             y = bbox[3] + s
 
 
-def _render_cable(url: str, title: str, number: str) -> Image.Image:
+def _render_cable(url: str, title: str, number: str, *, code, barcode_data) -> Image.Image:
     """45×30 mm flag (two 45×15 faces) plus 35×7 mm wrap tab on the right."""
     body_w, body_h = mm_to_px(45), mm_to_px(30)
     face_h = mm_to_px(15)
     tab_w, tab_h = mm_to_px(35), mm_to_px(7)
     canvas = Image.new("RGB", (body_w + tab_w, body_h), "white")
-    face = _cable_face(url, title, number, body_w, face_h)
+    face = _cable_face(
+        url, title, number, body_w, face_h, code=code, barcode_data=barcode_data
+    )
     canvas.paste(face, (0, 0))
     canvas.paste(face.rotate(180), (0, face_h))
     draw = ImageDraw.Draw(canvas)
@@ -450,9 +552,30 @@ def _render_cable(url: str, title: str, number: str) -> Image.Image:
     return canvas
 
 
-def _cable_face(url: str, title: str, number: str, width: int, height: int) -> Image.Image:
+def _cable_face(
+    url: str, title: str, number: str, width: int, height: int, *, code, barcode_data
+) -> Image.Image:
     face = Image.new("RGB", (width, height), "white")
     pad = mm_to_px(MARGIN_CABLE_MM)
+    if code == CODE_BARCODE:
+        inner_w = width - 2 * pad
+        inner_h = height - 2 * pad
+        bar_h = max(mm_to_px(5), int(inner_h * 0.55))
+        _paste_barcode(face, barcode_data, (pad, pad, inner_w, bar_h))
+        text_y = pad + bar_h + 1
+        text_h = height - pad - text_y
+        if inner_w > 4 and text_h > 4:
+            face.paste(
+                _sharp_text_image(
+                    inner_w,
+                    text_h,
+                    lambda draw, s: _paint_number_name(
+                        draw, s, inner_w, text_h, title, number, 11, 9
+                    ),
+                ),
+                (pad, text_y),
+            )
+        return face
     qr_box = min(height - 2 * pad, mm_to_px(11))
     _paste_qr(face, url, qr_box, (pad, (height - qr_box) // 2))
     x = pad + qr_box + mm_to_px(1)
@@ -470,6 +593,8 @@ def _cable_face(url: str, title: str, number: str, width: int, height: int) -> I
     return face
 
 
-def png_filename(stem: str, size: LabelSize) -> str:
+def png_filename(stem: str, size: LabelSize, code: str = CODE_QR) -> str:
     safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in stem).strip("-")
-    return f"{safe}-{size.key}.png"
+    extra = "" if get_label_code(code, size) == CODE_QR else "-barcode"
+    return f"{safe}-{size.key}{extra}.png"
+
