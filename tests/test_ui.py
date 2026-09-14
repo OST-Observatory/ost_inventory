@@ -211,6 +211,7 @@ class LabelsUiTests(TestCase):
         )
         self.assertEqual(preview.status_code, 200)
         self.assertContains(preview, "data:image/png;base64,")
+        self.assertContains(preview, 'data-share-png="data:image/png;base64,')
         self.assertContains(preview, self.item.name)
 
     def test_zip_and_ods(self):

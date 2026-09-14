@@ -152,6 +152,30 @@ function bindRoomPlaceSelects() {
   syncPlaces();
 }
 
+function dataUriToFile(uri, name) {
+  var comma = uri.indexOf(",");
+  if (comma < 0) {
+    throw new Error("invalid data uri");
+  }
+  var binary = atob(uri.slice(comma + 1));
+  var bytes = new Uint8Array(binary.length);
+  var i;
+  for (i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new File([bytes], name, { type: "image/png" });
+}
+
+function downloadSharedPng(btn) {
+  var card = btn.closest(".label-preview-card");
+  var link = card && card.querySelector("a[download]");
+  if (link) {
+    link.click();
+    return;
+  }
+  btn.textContent = "Use Download PNG";
+}
+
 function bindSharePng() {
   document.addEventListener("click", function (event) {
     var btn = event.target.closest("[data-share-png]");
@@ -161,28 +185,27 @@ function bindSharePng() {
     event.preventDefault();
     var uri = btn.getAttribute("data-share-png");
     var name = btn.getAttribute("data-share-name") || "label.png";
-    if (!navigator.share || !navigator.canShare) {
-      btn.textContent = "Use Download PNG";
+    if (!navigator.share) {
+      downloadSharedPng(btn);
       return;
     }
-    fetch(uri)
-      .then(function (res) {
-        return res.blob();
-      })
-      .then(function (blob) {
-        var file = new File([blob], name, { type: "image/png" });
-        if (!navigator.canShare({ files: [file] })) {
-          btn.textContent = "Use Download PNG";
-          return;
-        }
-        return navigator.share({ files: [file], title: name });
-      })
-      .catch(function (err) {
-        if (err && err.name === "AbortError") {
-          return;
-        }
-        btn.textContent = "Use Download PNG";
-      });
+    var file;
+    var payload;
+    try {
+      file = dataUriToFile(uri, name);
+      payload = { files: [file], title: name, text: name };
+    } catch (err) {
+      downloadSharedPng(btn);
+      return;
+    }
+    // Decode synchronously so iOS still treats this as a user gesture.
+    // Do not fetch() the data: URI — connect-src 'self' blocks it.
+    navigator.share(payload).catch(function (err) {
+      if (err && err.name === "AbortError") {
+        return;
+      }
+      downloadSharedPng(btn);
+    });
   });
 }
 
