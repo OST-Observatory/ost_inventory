@@ -82,7 +82,8 @@ class InventoryFlowTests(TestCase):
         self.assertContains(resp, "Tools → Locations")
         self.assertContains(resp, 'name="room"')
         self.assertContains(resp, 'name="category_1"')
-        self.assertContains(resp, 'list="category-suggestions"')
+        self.assertContains(resp, 'name="category_pick"')
+        self.assertContains(resp, 'value="Optics"')
         self.assertContains(resp, "Optics")
         resp = self.client.post(
             reverse("inventory:item_create"),
@@ -260,9 +261,55 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(Category.objects.filter(name__iexact="ccd").count(), 1)
         self.assertFalse(Category.objects.filter(name="Extra").exists())
         resp = self.client.get(reverse("inventory:item_edit", args=[item.pk]))
+        self.assertContains(resp, 'name="category_pick"')
         self.assertContains(resp, 'value="CCD"')
         self.assertContains(resp, 'value="Optics"')
+        self.assertContains(resp, "checked", html=False)
         self.assertNotContains(resp, 'name="category_5"')
+
+    def test_pick_existing_category_without_typing(self):
+        Category.objects.create(name="Optics")
+        Category.objects.create(name="Camera")
+        self.client.login(username="writer", password="x")
+        resp = self.client.post(
+            reverse("inventory:item_create"),
+            {
+                "name": "Lens",
+                "room": self.loc.pk,
+                "quantity": 1,
+                "description": "",
+                "comment": "",
+                "category_pick": ["Optics", "Camera"],
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+        item = Item.objects.get(name="Lens")
+        names = list(item.categories.order_by("name").values_list("name", flat=True))
+        self.assertEqual(names, ["Camera", "Optics"])
+        resp = self.client.get(reverse("inventory:item_edit", args=[item.pk]))
+        html = resp.content.decode()
+        self.assertIn('name="category_pick"', html)
+        self.assertRegex(html, r'value="Optics"\s+checked')
+        self.assertRegex(html, r'value="Camera"\s+checked')
+
+    def test_more_than_four_categories_is_rejected(self):
+        for name in ("Optics", "Camera", "Filter", "Cable", "Mount"):
+            Category.objects.create(name=name)
+        self.client.login(username="writer", password="x")
+        resp = self.client.post(
+            reverse("inventory:item_create"),
+            {
+                "name": "Too many cats",
+                "room": self.loc.pk,
+                "quantity": 1,
+                "description": "",
+                "comment": "",
+                "category_pick": ["Optics", "Camera", "Filter", "Cable", "Mount"],
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "At most 4 categories are allowed.")
+        self.assertFalse(Item.objects.filter(name="Too many cats").exists())
 
     def test_category_required(self):
         self.client.login(username="writer", password="x")

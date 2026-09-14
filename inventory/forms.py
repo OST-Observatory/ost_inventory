@@ -9,12 +9,28 @@ from .models import MAX_CATEGORIES, Category, Item, Loan, Location, Project
 
 
 CATEGORY_SLOTS = tuple(f"category_{i}" for i in range(1, MAX_CATEGORIES + 1))
+CATEGORY_PICK_FIELD = "category_pick"
+
+
+def _posted_list(data, name: str) -> list[str]:
+    if data is None:
+        return []
+    if hasattr(data, "getlist"):
+        values = data.getlist(name)
+    else:
+        value = data.get(name)
+        if value is None:
+            values = []
+        elif isinstance(value, (list, tuple)):
+            values = list(value)
+        else:
+            values = [value]
+    return [str(item).strip() for item in values if str(item).strip()]
 
 
 def _category_widget(placeholder: str) -> forms.TextInput:
     return forms.TextInput(
         attrs={
-            "list": "category-suggestions",
             "autocomplete": "off",
             "placeholder": placeholder,
         }
@@ -90,7 +106,7 @@ class ItemForm(forms.ModelForm):
         required=False,
         max_length=100,
         label="Category 1",
-        widget=_category_widget("Choose or type"),
+        widget=_category_widget("New name, if needed"),
     )
     category_2 = forms.CharField(
         required=False,
@@ -173,9 +189,6 @@ class ItemForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             if self.instance.project_id:
                 self.fields["project_name"].initial = self.instance.project.name
-            existing = list(self.instance.categories.all()[:MAX_CATEGORIES])
-            for i, cat in enumerate(existing, start=1):
-                self.fields[f"category_{i}"].initial = cat.name
         configure_installed_in_field(
             self.fields["installed_in"],
             self.instance if self.instance.pk else None,
@@ -184,6 +197,19 @@ class ItemForm(forms.ModelForm):
 
     def category_fields(self):
         return [self[name] for name in CATEGORY_SLOTS]
+
+    def category_limit(self) -> int:
+        return MAX_CATEGORIES
+
+    def picked_category_names(self) -> list[str]:
+        if self.is_bound:
+            return _posted_list(self.data, CATEGORY_PICK_FIELD)
+        if self.instance and self.instance.pk:
+            return [cat.name for cat in self.instance.categories.all()[:MAX_CATEGORIES]]
+        return []
+
+    def picked_category_keys(self) -> set[str]:
+        return {name.lower() for name in self.picked_category_names()}
 
     def clean_name(self):
         name = self.cleaned_data.get("name") or ""
@@ -227,22 +253,35 @@ class ItemForm(forms.ModelForm):
             self.add_error("place", "Place must belong to the selected room.")
         names = []
         seen = set()
-        for slot in CATEGORY_SLOTS:
-            raw = (cleaned.get(slot) or "").strip()
-            cleaned[slot] = raw
+
+        def add_category(raw: str, error_slot: str) -> None:
+            raw = (raw or "").strip()
             if not raw:
-                continue
+                return
             try:
                 reject_newlines(raw, "Category")
             except ValidationError as exc:
-                self.add_error(slot, exc)
-                continue
+                self.add_error(error_slot, exc)
+                return
             key = raw.lower()
             if key in seen:
-                continue
+                return
             seen.add(key)
             names.append(raw)
-        if not names and not any(self.has_error(slot) for slot in CATEGORY_SLOTS):
+
+        if self.is_bound:
+            for raw in _posted_list(self.data, CATEGORY_PICK_FIELD):
+                add_category(raw, "category_1")
+        for slot in CATEGORY_SLOTS:
+            raw = (cleaned.get(slot) or "").strip()
+            cleaned[slot] = raw
+            add_category(raw, slot)
+        if len(names) > MAX_CATEGORIES:
+            self.add_error(
+                "category_1",
+                f"At most {MAX_CATEGORIES} categories are allowed.",
+            )
+        elif not names and not any(self.has_error(slot) for slot in CATEGORY_SLOTS):
             self.add_error("category_1", "Select or add at least one category.")
         cleaned["category_names"] = names
         return cleaned

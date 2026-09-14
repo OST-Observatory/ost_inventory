@@ -606,11 +606,107 @@ function bindItemHostPickers() {
   });
 }
 
+function bindCategoryPicker() {
+  var root = document.querySelector("[data-category-picker]");
+  if (!root) {
+    return;
+  }
+  var limit = parseInt(root.getAttribute("data-category-limit") || "4", 10);
+  var filter = root.querySelector("[data-category-filter]");
+  var labels = root.querySelectorAll("[data-category-filter-text]");
+  var boxes = root.querySelectorAll('input[name="category_pick"]');
+  var typed = root.querySelectorAll(".category-slots input");
+  var countEl = root.querySelector("[data-category-count]");
+  var note = root.querySelector("[data-category-limit-note]");
+
+  function uniqueNames() {
+    var names = [];
+    var seen = {};
+    function add(raw) {
+      var key = (raw || "").trim().toLowerCase();
+      if (!key || seen[key]) {
+        return;
+      }
+      seen[key] = true;
+      names.push(key);
+    }
+    boxes.forEach(function (box) {
+      if (box.checked) {
+        add(box.value);
+      }
+    });
+    typed.forEach(function (input) {
+      add(input.value);
+    });
+    return names;
+  }
+
+  function updateCount() {
+    var n = uniqueNames().length;
+    if (countEl) {
+      countEl.textContent = n + " / " + limit;
+    }
+    if (!note) {
+      return;
+    }
+    if (n > limit) {
+      note.hidden = false;
+      note.textContent = "At most four categories are allowed.";
+      note.classList.add("is-warn");
+      return;
+    }
+    if (n === limit) {
+      note.hidden = false;
+      if (!note.classList.contains("is-warn")) {
+        note.textContent = "Maximum of four selected.";
+      }
+      return;
+    }
+    note.hidden = true;
+    note.classList.remove("is-warn");
+    note.textContent = "";
+  }
+
+  boxes.forEach(function (box) {
+    box.addEventListener("change", function () {
+      if (box.checked && uniqueNames().length > limit) {
+        box.checked = false;
+        if (note) {
+          note.hidden = false;
+          note.textContent = "At most four categories are allowed.";
+          note.classList.add("is-warn");
+        }
+      }
+      updateCount();
+    });
+  });
+  typed.forEach(function (input) {
+    input.addEventListener("input", updateCount);
+  });
+
+  if (filter && labels.length) {
+    filter.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+      }
+    });
+    filter.addEventListener("input", function () {
+      var q = (filter.value || "").trim().toLowerCase();
+      labels.forEach(function (label) {
+        var text = (label.getAttribute("data-category-filter-text") || "").toLowerCase();
+        label.hidden = Boolean(q) && text.indexOf(q) === -1;
+      });
+    });
+  }
+  updateCount();
+}
+
 function bindUi() {
   bindLabelFilters();
   bindNavDrawer();
   bindRoomPlaceSelects();
   bindItemHostPickers();
+  bindCategoryPicker();
   bindSharePng();
   bindLabelScanners();
   bindManualScan();

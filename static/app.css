@@ -747,6 +747,57 @@ dd { margin: 0; }
 .location-rename button { width: auto; margin-bottom: 0; padding: 0.4rem 0.75rem; }
 
 .category-slots { margin-top: 0.35rem; }
+.category-choice-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.75rem, 1fr));
+  column-gap: 0.55rem;
+  row-gap: 0;
+  max-height: 14rem;
+  overflow: auto;
+  margin: 0 0 0.5rem;
+  padding: 0.25rem 0.45rem 0.3rem;
+  border: 1px solid var(--ost-line);
+  border-radius: 0.35rem;
+  background: var(--ost-bg);
+}
+.category-choice-list .checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  width: auto;
+  margin: 0;
+  padding: 0.16rem 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+.category-choice-list .checkbox span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.category-choice-list input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  min-width: 1.05rem;
+  min-height: 1.05rem;
+  margin: 0;
+  padding: 0;
+  flex: none;
+}
+.category-fieldset > .toolbar {
+  margin: 0.35rem 0 0.45rem;
+}
+.category-fieldset > .toolbar input {
+  margin-bottom: 0;
+}
+.category-fieldset [data-category-count] {
+  flex: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.field-hint.is-warn { color: var(--overdue); }
 
 .label-toolbar { margin-bottom: 0.6rem; }
 .label-list { max-height: 22rem; overflow: auto; padding-right: 0.25rem; }

@@ -31,20 +31,41 @@
         <option value="{{ p.name }}">
       {% endfor %}
     </datalist>
-    <fieldset class="category-fieldset">
+    <fieldset class="category-fieldset" data-category-picker data-category-limit="{{ form.category_limit }}">
       <legend>Categories * (1–4)</legend>
-      <p class="field-hint">Pick an existing category from the list. Type a new name only if none fits.</p>
+      <p class="field-hint">Select up to four. Type a new name below only if none fits.</p>
+      {% if categories %}
+        <p class="toolbar">
+          <input
+            type="search"
+            data-category-filter
+            placeholder="Filter categories…"
+            autocomplete="off"
+            aria-label="Filter categories"
+          >
+          <span class="muted" data-category-count></span>
+        </p>
+        <div class="category-choice-list">
+          {% for c in categories %}
+            <label class="checkbox" data-category-filter-text="{{ c.name }}">
+              <input
+                type="checkbox"
+                name="category_pick"
+                value="{{ c.name }}"
+                {% if c.name|lower in form.picked_category_keys %}checked{% endif %}
+              >
+              <span>{{ c.name }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        <p class="field-hint" data-category-limit-note hidden></p>
+      {% endif %}
       <div class="field-row category-slots">
         {% for field in form.category_fields %}
           <label>{{ field.label }} {{ field }}{{ field.errors }}</label>
         {% endfor %}
       </div>
     </fieldset>
-    <datalist id="category-suggestions">
-      {% for c in categories %}
-        <option value="{{ c.name }}">
-      {% endfor %}
-    </datalist>
   </section>
 
   <section class="form-section">
