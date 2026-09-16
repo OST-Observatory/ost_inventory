@@ -13,8 +13,8 @@ container, and host item. PostgreSQL adds full-text search and typo-tolerant
 matching (`pg_trgm`). SQLite (development) uses case-insensitive contains.
 - **Items** — room plus optional place (e.g. `PRA / 2a`), 1–4 categories,
 optional project and container, quantity (exact or approximate), description,
-comment, photo. **Installed in** links a part to a host item; the part then
-follows the host’s location.
+comment, photo. **Mounted on** links an item to a host (e.g. a camera on a
+telescope); the mounted item then follows the host’s location.
 - **Photos** — upload on create/edit, or **Take photo** / **Replace photo** on
 the item page (rear camera on a phone). JPEG, PNG, and WebP; max 5 MB; images
 are re-encoded and stored under UUID names.
@@ -539,8 +539,8 @@ Required: `name`, `location_path` (`Room` or `Room/Place`, e.g. `PRA/2a`).
 
 Optional: `description`, `quantity`, `quantity_approximate` (`yes` / `true` /
 `1`), `container`, `categories` (semicolon-separated, max 4), `project`,
-`comment`, `installed_in` (inventory number such as `#0004` or numeric id; the
-host must already exist).
+`comment`, `installed_in` (inventory number such as `#0004` or numeric id of the
+item this one is mounted on; the host must already exist).
 
 Limits: 2 MB, 2000 rows, 500 characters per field, location depth 2. Formula-looking
 cells are sanitised on export. Web import is under **Tools → Import**; the

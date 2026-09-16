@@ -885,19 +885,19 @@ class InstalledInTests(TestCase):
         self.camera.installed_in = self.scope
         self.camera.save()
         detail = self.client.get(reverse("inventory:item_detail", args=[self.camera.pk]))
-        self.assertContains(detail, "Installed in")
+        self.assertContains(detail, "Mounted on")
         self.assertContains(detail, self.scope.inventory_number)
         self.assertContains(detail, "Telescope")
         host = self.client.get(reverse("inventory:item_detail", args=[self.scope.pk]))
-        self.assertContains(host, "Installed parts")
+        self.assertContains(host, "Mounted here")
         self.assertContains(host, "Camera")
         listing = self.client.get(reverse("inventory:search"))
-        self.assertContains(listing, "installed in")
+        self.assertContains(listing, "mounted on")
         found = self.client.get(reverse("inventory:search"), {"q": "Telescope"})
         self.assertContains(found, "Camera")
         create = self.client.get(reverse("inventory:item_create"))
-        self.assertContains(create, "Installed in")
-        self.assertContains(create, "Not installed in another item")
+        self.assertContains(create, "Mounted on")
+        self.assertContains(create, "Not mounted on another item")
         self.assertContains(create, "data-host-search")
 
     def test_edit_form_does_not_list_all_hosts(self):
@@ -910,9 +910,9 @@ class InstalledInTests(TestCase):
         edit = self.client.get(reverse("inventory:item_edit", args=[self.camera.pk]))
         self.assertContains(edit, "data-host-search")
         self.assertNotContains(edit, "Telescope")
-        self.assertNotContains(edit, "Mount")
+        self.assertNotContains(edit, extra.inventory_number)
         detail = self.client.get(reverse("inventory:item_detail", args=[self.camera.pk]))
-        self.assertContains(detail, "Install in…")
+        self.assertContains(detail, "Mount on…")
         self.assertContains(detail, "install-in-dialog")
 
     def test_host_lookup_excludes_self_and_matches_name(self):

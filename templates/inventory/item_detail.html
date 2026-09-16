@@ -53,7 +53,7 @@
       {% endwith %}
     {% endif %}
     <a href="{% url 'inventory:item_edit' item.pk %}" role="button">Edit</a>
-    <button type="button" data-dialog-open="install-in-dialog">Install in…</button>
+    <button type="button" data-dialog-open="install-in-dialog">Mount on…</button>
     {% if item.is_active %}
       <form method="post" action="{% url 'inventory:item_deactivate' item.pk %}" class="inline js-confirm"
             data-confirm="Deactivate this item?">
@@ -87,7 +87,7 @@
       <dl>
         <dt>Location</dt>
         <dd><a href="{% url 'inventory:location_detail' item.location_id %}">{{ item.location.path_display }}</a></dd>
-        <dt>Installed in</dt>
+        <dt>Mounted on</dt>
         <dd>
           {% if item.installed_in %}
             <a href="{% url 'inventory:item_detail' item.installed_in_id %}">{{ item.installed_in.inventory_number }} {{ item.installed_in.name }}</a>
@@ -95,7 +95,7 @@
         </dd>
         {% with parts=item.installed_parts.all %}
         {% if parts %}
-        <dt>Installed parts</dt>
+        <dt>Mounted here</dt>
         <dd>
           {% for part in parts %}
             <a href="{% url 'inventory:item_detail' part.pk %}">{{ part.inventory_number }} {{ part.name }}</a>{% if not forloop.last %}, {% endif %}
@@ -198,8 +198,8 @@
 <dialog id="install-in-dialog" class="ost-dialog">
   <form method="post" action="{% url 'inventory:item_install' item.pk %}">
     {% csrf_token %}
-    <h2>Install in…</h2>
-    <p class="muted">This item will follow the host's location. Choose “Not installed in another item” to unlink.</p>
+    <h2>Mount on…</h2>
+    <p class="muted">This item will follow the host's location. Choose “Not mounted on another item” to unlink.</p>
     {% include "inventory/partials/item_host_picker.html" with field=install_form.installed_in exclude_pk=item.pk %}
     <p class="actions-row">
       <button type="submit">Save</button>

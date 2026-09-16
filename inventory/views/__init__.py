@@ -230,7 +230,7 @@ def item_delete(request, pk):
     except ProtectedError:
         messages.error(
             request,
-            "Reassign or remove installed parts before deleting this item.",
+            "Reassign or remove items mounted here before deleting this item.",
         )
         return redirect("inventory:item_detail", pk=pk)
     messages.warning(request, "Item permanently deleted.")
@@ -290,10 +290,10 @@ def item_install(request, pk):
     item.save()
     if host:
         messages.success(
-            request, f"Installed in {host.inventory_number} {host.name}."
+            request, f"Mounted on {host.inventory_number} {host.name}."
         )
     else:
-        messages.success(request, "Removed from host item.")
+        messages.success(request, "No longer mounted on another item.")
     return redirect("inventory:item_detail", pk=pk)
 
 

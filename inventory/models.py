@@ -161,7 +161,8 @@ class Item(models.Model):
         blank=True,
         on_delete=models.PROTECT,
         related_name="installed_parts",
-        help_text="Another inventory item this one is built into.",
+        verbose_name="mounted on",
+        help_text="Another inventory item this one is mounted on.",
     )
     comment = models.TextField(blank=True)
     photo = models.ImageField(upload_to=item_photo_upload_to, null=True, blank=True)
@@ -240,14 +241,14 @@ class Item(models.Model):
             return
         if self.pk and self.installed_in_id == self.pk:
             raise ValidationError(
-                {"installed_in": "An item cannot be installed in itself."}
+                {"installed_in": "An item cannot be mounted on itself."}
             )
         host_id = self.installed_in_id
         seen = {self.pk} if self.pk else set()
         while host_id:
             if host_id in seen:
                 raise ValidationError(
-                    {"installed_in": "That would create a loop of installed items."}
+                    {"installed_in": "That would create a loop of mounted items."}
                 )
             seen.add(host_id)
             host_id = (

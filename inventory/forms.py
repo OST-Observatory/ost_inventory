@@ -58,9 +58,9 @@ def configure_installed_in_field(field, item=None, data=None, name="installed_in
             ).order_by("name")
     field.queryset = host_qs
     field.required = False
-    field.empty_label = "Not installed in another item"
+    field.empty_label = "Not mounted on another item"
     field.label_from_instance = lambda obj: f"{obj.inventory_number} {obj.name}"
-    choices = [("", "Not installed in another item")]
+    choices = [("", "Not mounted on another item")]
     selected_pk = None
     if data is not None:
         raw = data.get(name)
@@ -246,7 +246,7 @@ class ItemForm(forms.ModelForm):
         room = cleaned.get("room")
         place = cleaned.get("place")
         if installed_in and self.instance.pk and installed_in.pk == self.instance.pk:
-            self.add_error("installed_in", "An item cannot be installed in itself.")
+            self.add_error("installed_in", "An item cannot be mounted on itself.")
         elif not installed_in and not room:
             self.add_error("room", "Select a room.")
         if place and room and place.parent_id != room.pk:
