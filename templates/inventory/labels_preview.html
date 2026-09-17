@@ -32,7 +32,7 @@
     <p><strong>{{ label.title }}</strong><br><span class="muted">{{ label.subtitle }}</span></p>
     <div class="label-preview-buttons">
       <a href="{% url 'inventory:labels_png' %}?kind={{ label.kind }}&amp;id={{ label.pk }}&amp;size={{ size.key }}&amp;code={{ code }}" download="{{ label.filename }}" role="button" class="secondary outline">Download PNG</a>
-      <button type="button" class="secondary" data-share-png="{{ label.data_uri }}" data-share-name="{{ label.filename }}">Share</button>
+      <button type="button" class="secondary" data-share-png="{{ label.data_uri }}" data-share-name="{{ label.filename }}" data-share-href="{% url 'inventory:labels_png' %}?kind={{ label.kind }}&amp;id={{ label.pk }}&amp;size={{ size.key }}&amp;code={{ code }}">Share</button>
     </div>
   </article>
   {% endfor %}

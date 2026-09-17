@@ -166,9 +166,51 @@ function dataUriToFile(uri, name) {
   return new File([bytes], name, { type: "image/png" });
 }
 
+function canShareData(data) {
+  if (typeof navigator.share !== "function") {
+    return false;
+  }
+  if (typeof navigator.canShare !== "function") {
+    return true;
+  }
+  try {
+    return navigator.canShare(data);
+  } catch (err) {
+    return false;
+  }
+}
+
+function shareData(payload) {
+  return navigator.share(payload).catch(function (err) {
+    if (err && (err.name === "AbortError" || err.name === "NotAllowedError")) {
+      return;
+    }
+    throw err;
+  });
+}
+
+function labelPngUrl(btn) {
+  var href = btn.getAttribute("data-share-href") || "";
+  var card;
+  var link;
+  if (!href) {
+    card = btn.closest(".label-preview-card");
+    link = card && card.querySelector("a[download]");
+    href = (link && (link.getAttribute("href") || link.href)) || "";
+  }
+  if (!href) {
+    return "";
+  }
+  try {
+    return new URL(href, window.location.href).href;
+  } catch (err) {
+    return href;
+  }
+}
+
 function bindSharePng() {
   document.querySelectorAll("[data-share-png]").forEach(function (btn) {
-    btn.hidden = !navigator.share;
+    btn.hidden = typeof navigator.share !== "function";
   });
   document.addEventListener("click", function (event) {
     var btn = event.target.closest("[data-share-png]");
@@ -176,30 +218,35 @@ function bindSharePng() {
       return;
     }
     event.preventDefault();
-    if (!navigator.share) {
+    if (typeof navigator.share !== "function") {
       return;
     }
     var card = btn.closest(".label-preview-card");
     var img = card && card.querySelector("img.label-preview-img");
     var uri = btn.getAttribute("data-share-png") || (img && img.getAttribute("src")) || "";
     var name = btn.getAttribute("data-share-name") || "label.png";
+    var pngUrl = labelPngUrl(btn);
     var file;
-    var payload;
+    var filesPayload;
     try {
       file = dataUriToFile(uri, name);
-      payload = { files: [file] };
+      filesPayload = { files: [file] };
     } catch (err) {
+      filesPayload = null;
+    }
+    // Files only: iOS rejects title/text together with a PNG.
+    // Firefox/Fennec implement share() but not file attachments.
+    if (filesPayload && canShareData(filesPayload)) {
+      shareData(filesPayload).catch(function () {
+        if (pngUrl && canShareData({ url: pngUrl })) {
+          return shareData({ url: pngUrl });
+        }
+      });
       return;
     }
-    // Files only: iOS rejects title/text together with a PNG and then looks like a failed share.
-    if (typeof navigator.canShare === "function" && !navigator.canShare(payload)) {
-      return;
+    if (pngUrl && canShareData({ url: pngUrl })) {
+      shareData({ url: pngUrl });
     }
-    navigator.share(payload).catch(function (err) {
-      if (err && (err.name === "AbortError" || err.name === "NotAllowedError")) {
-        return;
-      }
-    });
   });
 }
 
