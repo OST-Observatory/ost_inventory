@@ -215,11 +215,20 @@
     {% csrf_token %}
     <input type="hidden" name="items" value="{{ item.pk }}">
     <h2>Print label</h2>
+    {% if label_printer_name %}
+    <p class="muted">Choose a tape size and QR or barcode, then print on {{ label_printer_name }} or generate a PNG for the Katasymbol app.</p>
+    {% else %}
     <p class="muted">Choose a tape size and QR or barcode, then generate a PNG for the Katasymbol app.</p>
+    {% endif %}
     {% include "inventory/partials/label_size_picker.html" %}
     {% include "inventory/partials/label_code_picker.html" %}
     <p class="actions-row">
+      {% if label_printer_name %}
+      <button type="submit" formaction="{% url 'inventory:labels_print' %}">Print now</button>
+      <button type="submit" class="secondary">Generate</button>
+      {% else %}
       <button type="submit">Generate</button>
+      {% endif %}
       <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
     </p>
   </form>

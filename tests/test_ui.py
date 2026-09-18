@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -6,6 +7,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse, set_script_prefix
 
 from inventory.models import Item, Loan, Location
+from inventory.printing import IppJobResult, PrintError
 from inventory.templatetags.display import relative_due
 
 User = get_user_model()
@@ -252,6 +254,93 @@ class LabelsUiTests(TestCase):
         )
         self.assertEqual(png.status_code, 200)
         self.assertIn("barcode", png.get("Content-Disposition", ""))
+
+    @override_settings(LABEL_PRINTER_URI="")
+    def test_print_buttons_hidden_without_printer(self):
+        preview = self.client.post(
+            reverse("inventory:labels"),
+            {"items": [str(self.item.pk)], "label_size": "40x30"},
+        )
+        self.assertNotContains(preview, reverse("inventory:labels_print"))
+        detail = self.client.get(reverse("inventory:item_detail", args=[self.item.pk]))
+        self.assertNotContains(detail, "Print now")
+        resp = self.client.post(
+            reverse("inventory:labels_print"),
+            {"items": [str(self.item.pk)], "label_size": "40x30"},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    @override_settings(
+        LABEL_PRINTER_URI="ipp://printer.test:8631/ipp/print/t50",
+        LABEL_PRINTER_NAME="T50M Pro",
+    )
+    def test_print_buttons_shown_with_printer(self):
+        preview = self.client.post(
+            reverse("inventory:labels"),
+            {"items": [str(self.item.pk)], "label_size": "40x30"},
+        )
+        self.assertContains(preview, reverse("inventory:labels_print"))
+        self.assertContains(preview, "Print on T50M Pro")
+        self.assertContains(preview, 'name="copies"')
+        self.assertNotContains(preview, 'style="')
+        detail = self.client.get(reverse("inventory:item_detail", args=[self.item.pk]))
+        self.assertContains(detail, "Print now")
+        self.assertContains(detail, f'formaction="{reverse("inventory:labels_print")}"')
+
+    @override_settings(
+        LABEL_PRINTER_URI="ipp://printer.test:8631/ipp/print/t50",
+        LABEL_PRINTER_NAME="T50M Pro",
+        LABEL_PRINTER_TIMEOUT=7,
+    )
+    def test_print_sends_pwg_raster(self):
+        with mock.patch(
+            "inventory.views.extras.ipp_print_job",
+            return_value=IppJobResult(42, "pending", 0),
+        ) as sender:
+            resp = self.client.post(
+                reverse("inventory:labels_print"),
+                {"items": [str(self.item.pk)], "label_size": "40x30", "copies": "2"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Sent 1 label (2 copies each) to T50M Pro, job #42")
+        self.assertContains(resp, "data:image/png;base64,")
+        sender.assert_called_once()
+        args, kwargs = sender.call_args
+        self.assertEqual(args[0], "ipp://printer.test:8631/ipp/print/t50")
+        self.assertTrue(args[1].startswith(b"RaS2"))
+        self.assertEqual(kwargs["document_format"], "image/pwg-raster")
+        self.assertEqual(kwargs["copies"], 2)
+        self.assertEqual(kwargs["user_name"], "writer")
+        self.assertEqual(kwargs["timeout"], 7)
+        self.assertIn("40x30", kwargs["job_name"])
+
+    @override_settings(LABEL_PRINTER_URI="ipp://printer.test:8631/ipp/print/t50")
+    def test_print_failure_shows_message(self):
+        with mock.patch(
+            "inventory.views.extras.ipp_print_job",
+            side_effect=PrintError("Cannot reach printer at printer.test:8631"),
+        ):
+            resp = self.client.post(
+                reverse("inventory:labels_print"),
+                {"items": [str(self.item.pk)], "label_size": "40x30"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Printing failed: Cannot reach printer at printer.test:8631")
+        self.assertContains(resp, "data:image/png;base64,")
+
+    @override_settings(LABEL_PRINTER_URI="ipp://printer.test:8631/ipp/print/t50")
+    def test_print_validates_input(self):
+        with mock.patch("inventory.views.extras.ipp_print_job") as sender:
+            self.assertEqual(self.client.get(reverse("inventory:labels_print")).status_code, 405)
+            bad = self.client.post(
+                reverse("inventory:labels_print"),
+                {"items": [str(self.item.pk)], "label_size": "40x30", "copies": "99"},
+            )
+            self.assertEqual(bad.status_code, 400)
+            nothing = self.client.post(reverse("inventory:labels_print"), {"label_size": "40x30"})
+            self.assertEqual(nothing.status_code, 200)
+            self.assertContains(nothing, "Select at least one item or location.")
+        sender.assert_not_called()
 
 
 class CsvImportPageTests(TestCase):

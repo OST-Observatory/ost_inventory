@@ -26,8 +26,9 @@ Overdue reminders can be sent daily.
 30×20 mm, plus a cable flag). Choose a **QR code** (short `/i/<id>/` or
 `/l/<id>/` URL) or a **Code 128 barcode** of the inventory number (`#0012`, or
 `L12` for a location). Compact tapes default to barcode. Print from the label
-printer’s own app. On **Search**, **Scan label** opens the camera (Chrome/Safari)
-or a number field and jumps to the matching item or location.
+printer’s own app, or send labels straight to a Supvan/Katasymbol T50 printer
+over IPP (see **Label printer** below). On **Search**, **Scan label** opens the
+camera (Chrome/Safari) or a number field and jumps to the matching item or location.
 - **Stocktake** — a dated physical count (separate from **Still here** / not
 seen recently).
 - **CSV** — import (preview, then commit) and export. Matching on import is
@@ -532,6 +533,43 @@ sudo systemctl restart ost-inventory.service
 ---
 
 
+
+## Label printer (optional)
+
+Labels can be printed directly on a Supvan / Katasymbol T50-series printer
+(T50M, T50M Pro, T50s, …) without the vendor app. The app renders the label as a
+1-bit PWG raster at the printer's native 203 dpi and submits it as an IPP
+Print-Job, so what you see in the preview is what gets printed. No CUPS client
+or extra Python package is needed.
+
+The printer itself only speaks USB-HID and Bluetooth. Run
+[supvan-cups](https://github.com/heeen/supvan-cups) (`supvan-printer-app`) on
+the machine the printer is plugged into or paired with; it exposes the printer as
+an IPP Everywhere service on port 8631. Its web index (`http://<host>:8631/`)
+lists the logical printer name. Then set in `.env`:
+
+```
+LABEL_PRINTER_URI=ipp://printhost.local:8631/ipp/print/supvan_t50_series_<serial>
+LABEL_PRINTER_NAME=T50M Pro
+LABEL_PRINTER_TIMEOUT=30
+```
+
+Any IPP printer or CUPS queue that accepts `image/pwg-raster` works the same way
+(`ipp://localhost:631/printers/<queue>`). With `LABEL_PRINTER_URI` set, the label
+preview gains **Print on …** with a copies field, and the **Print label** dialog on
+an item page gains **Print now**. Leave the URI empty to hide both.
+
+Check connectivity and send a test label:
+
+```bash
+.venv/bin/python manage.py check_label_printer
+.venv/bin/python manage.py check_label_printer --test-page --size 40x30
+```
+
+Notes: the T50 head prints 48 mm of a 50 mm tape, so 50 × 80 labels lose 1 mm
+on each side (the layout already keeps a wider margin). Cable-flag labels are
+rotated so the 30 mm side runs across the head. Print darkness is a setting of
+`supvan-printer-app`, not of the job.
 
 ## CSV format
 

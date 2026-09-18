@@ -323,3 +323,48 @@ class CheckLdapCommandTests(TestCase):
         err = StringIO()
         with self.assertRaises(CommandError):
             call_command("check_ldap", stdout=StringIO(), stderr=err)
+
+
+@override_settings(LABEL_PRINTER_URI="ipp://printer.test:8631/ipp/print/t50")
+class LabelPrintAccessTests(TestCase):
+    def setUp(self):
+        self.writer = User.objects.create_user(
+            username="writer", password="x", is_supervisor=True
+        )
+        self.reader = User.objects.create_user(
+            username="reader", password="x", is_student=True
+        )
+        loc = Location.objects.create(name="Lab")
+        self.item = Item.objects.create(
+            name="Camera", location=loc, created_by=self.writer, updated_by=self.writer
+        )
+        self.data = {"items": [str(self.item.pk)], "label_size": "40x30"}
+        self.client = Client()
+
+    def test_anonymous_is_redirected_and_nothing_is_sent(self):
+        with patch("inventory.views.extras.ipp_print_job") as sender:
+            resp = self.client.post(reverse("inventory:labels_print"), self.data)
+        self.assertEqual(resp.status_code, 302)
+        sender.assert_not_called()
+
+    def test_reader_without_labels_capability_is_forbidden(self):
+        self.client.login(username="reader", password="x")
+        with patch("inventory.views.extras.ipp_print_job") as sender:
+            resp = self.client.post(reverse("inventory:labels_print"), self.data)
+        self.assertEqual(resp.status_code, 403)
+        sender.assert_not_called()
+
+    def test_check_label_printer_requires_uri(self):
+        with override_settings(LABEL_PRINTER_URI=""):
+            with self.assertRaises(CommandError):
+                call_command("check_label_printer", stdout=StringIO(), stderr=StringIO())
+
+    def test_check_label_printer_reports_unreachable_printer(self):
+        with self.assertRaises(CommandError) as ctx:
+            call_command(
+                "check_label_printer",
+                uri="ipp://127.0.0.1:9/ipp/print/none",
+                stdout=StringIO(),
+                stderr=StringIO(),
+            )
+        self.assertIn("Cannot reach printer", str(ctx.exception))

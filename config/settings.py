@@ -135,6 +135,12 @@ EMAIL_BACKEND = resolve_email_backend(EMAIL_METHOD, EMAIL_HOST)
 if EMAIL_BACKEND == SMTP_BACKEND and not (EMAIL_HOST or "").strip():
     EMAIL_HOST = "localhost"
 
+# Direct label printing over IPP (e.g. supvan-printer-app for Supvan/Katasymbol
+# T50 printers, or any CUPS queue). Empty URI hides the print buttons.
+LABEL_PRINTER_URI = env("LABEL_PRINTER_URI", default="").strip()
+LABEL_PRINTER_NAME = env("LABEL_PRINTER_NAME", default="Label printer").strip() or "Label printer"
+LABEL_PRINTER_TIMEOUT = env.int("LABEL_PRINTER_TIMEOUT", default=30)
+
 # LDAP env (configured only when LDAP_SERVER_URI is set)
 AUTH_LDAP_SERVER_URI = env.str("LDAP_SERVER_URI", default="")
 AUTH_LDAP_START_TLS = env.bool("LDAP_START_TLS", default=False)

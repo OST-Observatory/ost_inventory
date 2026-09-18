@@ -30,6 +30,7 @@ from inventory.views.extras import (
     labels_ods,
     labels_page,
     labels_png,
+    labels_print,
     labels_zip,
     scan_lookup,
 )
@@ -83,5 +84,6 @@ urlpatterns = [
     path("labels/zip/", labels_zip, name="labels_zip"),
     path("labels/ods/", labels_ods, name="labels_ods"),
     path("labels/png/", labels_png, name="labels_png"),
+    path("labels/print/", labels_print, name="labels_print"),
     path("scan/lookup/", scan_lookup, name="scan_lookup"),
 ]

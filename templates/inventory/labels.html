@@ -2,7 +2,11 @@
 {% block title %}Labels — OST Inventory{% endblock %}
 {% block content %}
 <h1>Labels</h1>
+{% if label_printer_name %}
+<p class="muted">Select items and locations, choose a tape size and QR or barcode, then generate labels. From the preview you can print on {{ label_printer_name }} or download PNGs for the Katasymbol app. ODS is data only — pick the same size in the app.</p>
+{% else %}
 <p class="muted">Select items and locations, choose a tape size and QR or barcode, then generate PNGs for the Katasymbol app. ODS is data only — pick the same size in the app.</p>
+{% endif %}
 
 <form method="post" id="label-form">
   {% csrf_token %}

@@ -6,7 +6,7 @@ import zipfile
 from django.conf import settings
 from django.contrib import messages
 from django.core.management.base import CommandError
-from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods
@@ -24,6 +24,7 @@ from inventory.labels import (
 )
 from inventory.models import Item, Location
 from inventory.ods import spreadsheet_bytes
+from inventory.printing import PWG_RASTER_FORMAT, PrintError, ipp_print_job, png_to_pwg_raster
 from inventory.policy import visible_items
 from inventory.scan import resolve_scan_target
 from inventory.search import filter_items
@@ -180,6 +181,10 @@ def labels_page(request):
     if not jobs:
         messages.error(request, "Select at least one item or location.")
         return render(request, "inventory/labels.html", _labels_form_context(request))
+    return _render_preview(request, size, code, jobs)
+
+
+def _render_preview(request, size, code, jobs):
     previews = []
     for job in jobs:
         previews.append(
@@ -199,6 +204,52 @@ def labels_page(request):
             "location_ids": request.POST.getlist("locations"),
         },
     )
+
+
+MAX_LABEL_COPIES = 10
+
+
+@labels_required
+@require_http_methods(["POST"])
+def labels_print(request):
+    """Send the selected labels straight to the configured IPP label printer."""
+    printer_uri = getattr(settings, "LABEL_PRINTER_URI", "")
+    if not printer_uri:
+        raise Http404("No label printer configured.")
+    try:
+        copies = int(request.POST.get("copies") or 1)
+    except ValueError:
+        return HttpResponseBadRequest("Invalid copies.")
+    if not 1 <= copies <= MAX_LABEL_COPIES:
+        return HttpResponseBadRequest(f"Copies must be between 1 and {MAX_LABEL_COPIES}.")
+    size, code, jobs = _selected_label_jobs(request)
+    if not jobs:
+        messages.error(request, "Select at least one item or location.")
+        return render(request, "inventory/labels.html", _labels_form_context(request))
+    printer_name = getattr(settings, "LABEL_PRINTER_NAME", "") or "Label printer"
+    try:
+        document = png_to_pwg_raster([job["png"] for job in jobs], copies=copies)
+        result = ipp_print_job(
+            printer_uri,
+            document,
+            document_format=PWG_RASTER_FORMAT,
+            job_name=f"OST labels {size.key} x{len(jobs)}",
+            user_name=request.user.get_username(),
+            copies=copies,
+            timeout=getattr(settings, "LABEL_PRINTER_TIMEOUT", 30),
+        )
+    except PrintError as exc:
+        messages.error(request, f"Printing failed: {exc}")
+    else:
+        count = len(jobs)
+        noun = "label" if count == 1 else "labels"
+        copies_note = f" ({copies} copies each)" if copies > 1 else ""
+        job_note = f", job #{result.job_id}" if result.job_id is not None else ""
+        messages.success(
+            request,
+            f"Sent {count} {noun}{copies_note} to {printer_name}{job_note}. State: {result.job_state}.",
+        )
+    return _render_preview(request, size, code, jobs)
 
 
 @labels_required

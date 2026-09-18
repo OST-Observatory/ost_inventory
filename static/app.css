@@ -395,6 +395,18 @@ h2 { margin-top: 0; }
 }
 .action-bar { margin: 0.75rem 0 1rem; }
 .action-bar .inline { margin: 0; }
+.label-print-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0;
+}
+.label-print-form label { margin: 0; }
+.label-print-form input[type="number"] {
+  width: 5rem;
+  margin: 0;
+}
 .ost-btn,
 .action-bar :is(button, a[role="button"], .photo-capture) {
   width: auto;
