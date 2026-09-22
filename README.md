@@ -595,6 +595,19 @@ row is created.
 
 - Production settings validation (Postgres, `SECRET_KEY`, `ALLOWED_HOSTS`, no debug).
 - HTTPS redirect and HSTS; `Secure` cookies; `X-Forwarded-Proto` from Apache.
+- Own cookie names (`ost_inventory_sessionid`, `ost_inventory_csrftoken`),
+  `HttpOnly` and `SameSite=Lax` sessions; with `FORCE_SCRIPT_NAME` the cookies
+  are also scoped to that path. Cookies are shared per host, not per port or
+  path, so the Django defaults would collide with other projects on the host.
+  Messages live in the session, because Django's fallback cookie is always
+  called `messages` and would collide in the same way.
+- `CSRF_COOKIE_HTTPONLY = True`. **This breaks a POST written later in
+  JavaScript:** `document.cookie` holds no CSRF token, so a hand-written
+  `fetch()`/XHR write sends an empty `X-CSRFToken` and Django answers `403`
+  (`CSRF cookie not set` / `CSRF token missing`). Forms and htmx are unaffected
+  — they post `{% csrf_token %}` from the form body. If you hit that 403, take
+  the token from a `{% csrf_token %}` input in the DOM; do not disable the
+  setting. The same note sits in `config/settings.py` and `static/app.js`.
 - CSP and Permissions-Policy; Pico CSS and htmx are self-hosted.
 - LDAP in production is TLS-only.
 - Login rate limit: 5 failures / 10 minutes, then 15 minutes backoff.

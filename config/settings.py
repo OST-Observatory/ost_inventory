@@ -94,7 +94,29 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "inventory:search"
 LOGOUT_REDIRECT_URL = "login"
 
+# Cookies are scoped by host, not by port or path, so every Django project on a
+# shared host would overwrite the defaults ("sessionid"/"csrftoken") of the next.
+SESSION_COOKIE_NAME = "ost_inventory_sessionid"
+CSRF_COOKIE_NAME = "ost_inventory_csrftoken"
 SESSION_COOKIE_AGE = 60 * 60 * 12
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+# WARNING: this makes the CSRF token unreadable for JavaScript. Every unsafe
+# request today is a form submit carrying {% csrf_token %} (htmx posts the form
+# body), so nothing reads document.cookie. A POST/PUT/DELETE added later via
+# fetch() or XMLHttpRequest breaks here: document.cookie has no
+# "ost_inventory_csrftoken", the X-CSRFToken header goes out empty and Django
+# answers 403 "CSRF cookie not set" / "CSRF token missing". Fix it by reading
+# the token out of a {% csrf_token %} hidden input in the DOM, not by setting
+# this back to False. Same note in static/app.js, templates/base.html and the
+# README "Security" section.
+CSRF_COOKIE_HTTPONLY = True
+
+# The FallbackStorage overflow cookie is hard-coded to "messages" in Django and
+# has no name setting, so it would collide with the other projects on this host.
+# Sessions hold the messages instead; nothing falls back to a cookie.
+MESSAGE_STORAGE = "django.contrib.messages.storage.session.SessionStorage"
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024

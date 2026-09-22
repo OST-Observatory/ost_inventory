@@ -1,3 +1,12 @@
+// CSRF and fetch(): CSRF_COOKIE_HTTPONLY is True, so document.cookie does NOT
+// contain "ost_inventory_csrftoken" and never will. The fetch() calls below are
+// GETs, which need no token. If you add a POST/PUT/DELETE here and it comes back
+// 403 ("CSRF cookie not set" / "CSRF token missing"), that is the reason: read
+// the token from a {% csrf_token %} hidden input in the DOM, e.g.
+//   document.querySelector("input[name=csrfmiddlewaretoken]").value
+// and send it as the X-CSRFToken header. Do not turn the setting off.
+// See config/settings.py (CSRF_COOKIE_HTTPONLY) and README "Security".
+
 document.addEventListener("submit", function (event) {
   var form = event.target;
   if (!form.classList || !form.classList.contains("js-confirm")) {
@@ -262,6 +271,7 @@ function lookupScannedCode(raw, onHit, onMiss) {
     onMiss();
     return;
   }
+  // GET, so no CSRF token needed — and none is readable, see the file header.
   fetch(url + "?q=" + encodeURIComponent(raw), {
     headers: { Accept: "application/json" },
     credentials: "same-origin",
@@ -635,6 +645,7 @@ function bindItemHostPickers() {
         if (exclude) {
           url += "&exclude=" + encodeURIComponent(exclude);
         }
+        // GET, so no CSRF token needed — and none is readable, see the file header.
         fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" })
           .then(function (res) {
             if (!res.ok) {

@@ -9,6 +9,10 @@
   <title>{% block title %}OST Inventory{% endblock %}</title>
   <script src="{% static 'theme.js' %}"></script>
   <link rel="stylesheet" href="{% static 'vendor/pico.min.css' %}">
+  {# htmx posts the surrounding form, so {% csrf_token %} in the form is enough. #}
+  {# Hand-written fetch()/XHR writes cannot read the token: CSRF_COOKIE_HTTPONLY #}
+  {# is True, so document.cookie has no token and such a request gets a 403. #}
+  {# Take it from a {% csrf_token %} input in the DOM. See static/app.js. #}
   <script src="{% static 'vendor/htmx.min.js' %}"></script>
   <link rel="stylesheet" href="{% static 'app.css' %}">
   <script src="{% static 'app.js' %}" defer></script>

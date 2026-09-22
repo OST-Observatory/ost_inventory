@@ -34,6 +34,12 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+# Defence in depth on a shared host, not a security boundary: cookie paths are
+# not enforced against script access. No trailing slash, so "/inventory" itself
+# still carries the cookie. Names are set in settings.py.
+if _script:
+    SESSION_COOKIE_PATH = _script
+    CSRF_COOKIE_PATH = _script
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=31536000)

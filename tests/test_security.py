@@ -368,3 +368,90 @@ class LabelPrintAccessTests(TestCase):
                 stderr=StringIO(),
             )
         self.assertIn("Cannot reach printer", str(ctx.exception))
+
+
+class CookieNameTests(TestCase):
+    """Several Django projects share the web server; cookie names must not collide."""
+
+    def setUp(self):
+        self.client = Client()
+        User.objects.create_user(username="cookie", password="x", is_student=True)
+
+    def test_session_cookie_is_project_specific_and_hardened(self):
+        # A real POST, because client.login() sets the cookie without attributes.
+        resp = self.client.post(
+            reverse("login"), {"username": "cookie", "password": "x"}
+        )
+        self.assertNotIn("sessionid", resp.cookies)
+        cookie = resp.cookies["ost_inventory_sessionid"]
+        self.assertTrue(cookie["httponly"])
+        self.assertEqual(cookie["samesite"], "Lax")
+
+    def test_csrf_cookie_is_project_specific_and_not_readable_by_javascript(self):
+        resp = self.client.get(reverse("login"))
+        self.assertNotIn("csrftoken", resp.cookies)
+        cookie = resp.cookies["ost_inventory_csrftoken"]
+        self.assertTrue(
+            cookie["httponly"],
+            "CSRF_COOKIE_HTTPONLY was turned off. If this happened because a "
+            "fetch()/XHR POST returned 403, the fix is to read the token from a "
+            "{% csrf_token %} input in the DOM, not to expose the cookie to "
+            "JavaScript. See config/settings.py and static/app.js.",
+        )
+
+    def test_messages_do_not_fall_back_to_the_shared_messages_cookie(self):
+        # Django hard-codes that cookie name, so it would collide on this host.
+        self.assertEqual(
+            settings.MESSAGE_STORAGE,
+            "django.contrib.messages.storage.session.SessionStorage",
+        )
+        writer = User.objects.create_user(
+            username="writer_cookie", password="x", is_supervisor=True
+        )
+        loc = Location.objects.create(name="Cookie lab")
+        item = Item.objects.create(
+            name="Tripod", location=loc, created_by=writer, updated_by=writer
+        )
+        self.client.force_login(writer)
+        redirect = self.client.post(
+            reverse("inventory:item_deactivate", args=[item.pk])
+        )
+        self.assertNotIn("messages", redirect.cookies)
+        # The setting above is the real guard; this shows messages still work
+        # end to end on session storage, which is what the switch could break.
+        detail = self.client.get(redirect["Location"])
+        self.assertContains(detail, "Item deactivated.")
+        self.assertNotIn("messages", detail.cookies)
+
+    def test_production_scopes_cookies_to_the_script_prefix(self):
+        import importlib
+        import os
+        import sys
+
+        env = {
+            "DATABASE_NAME": "x",
+            "DATABASE_USER": "x",
+            "DATABASE_PASSWORD": "x",
+        }
+
+        def load(script_name):
+            # A fresh import, not a reload: reload keeps names the previous run
+            # defined. Development never imports this module, and it demands the
+            # production database env at import time.
+            sys.modules.pop("config.settings_production", None)
+            with patch.dict(os.environ, {**env, "FORCE_SCRIPT_NAME": script_name}):
+                return importlib.import_module("config.settings_production")
+
+        self.addCleanup(sys.modules.pop, "config.settings_production", None)
+
+        prod = load("/inventory")
+        self.assertTrue(prod.SESSION_COOKIE_SECURE)
+        self.assertTrue(prod.CSRF_COOKIE_SECURE)
+        # No trailing slash: "/inventory" itself still carries the cookie.
+        self.assertEqual(prod.SESSION_COOKIE_PATH, "/inventory")
+        self.assertEqual(prod.CSRF_COOKIE_PATH, "/inventory")
+
+        # Dedicated vhost: no prefix, so Django's default "/" applies.
+        prod = load("")
+        self.assertFalse(hasattr(prod, "SESSION_COOKIE_PATH"))
+        self.assertFalse(hasattr(prod, "CSRF_COOKIE_PATH"))
