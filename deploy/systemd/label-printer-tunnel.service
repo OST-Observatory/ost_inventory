@@ -1,0 +1,43 @@
+# Reverse SSH tunnel: offers a locally attached label printer to the OST
+# Inventory server when the two are NOT on the same network (laptop behind
+# NAT, server in the university network).
+#
+# This is a USER unit for the LAPTOP the printer is paired with, not for the
+# server. It forwards the server's loopback port 8631 to supvan-printer-app
+# here, so the server prints to ipp://localhost:8631/... and never needs to
+# reach the laptop directly.
+#
+# Install on the laptop:
+#   1. Passwordless key login to the server must work:  ssh USER@SERVER true
+#   2. Put your values in place of USER@SERVER below.
+#   3. install -Dm644 label-printer-tunnel.service \
+#        ~/.config/systemd/user/label-printer-tunnel.service
+#      systemctl --user daemon-reload
+#      systemctl --user enable --now label-printer-tunnel
+#   4. On the SERVER, in /opt/ost_inventory/.env:
+#        LABEL_PRINTER_URI=ipp://localhost:8631/ipp/print/<logical-printer-name>
+#      then: sudo systemctl restart ost-inventory
+#
+# The remote end binds 127.0.0.1 only, so no one outside the server can print.
+# Printing works while this laptop is awake, online and logged in; consider
+# `sudo loginctl enable-linger $USER` so the user services survive logout.
+
+[Unit]
+Description=Reverse SSH tunnel offering the local label printer to the inventory server
+After=network-online.target supvan-printer-app.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -N -T \
+    -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    -o StrictHostKeyChecking=accept-new \
+    -R 127.0.0.1:8631:127.0.0.1:8631 \
+    USER@SERVER
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

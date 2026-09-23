@@ -554,10 +554,42 @@ LABEL_PRINTER_NAME=T50M Pro
 LABEL_PRINTER_TIMEOUT=30
 ```
 
+Use `localhost` when the app and supvan-printer-app run on the same machine.
+Prefer a plain DNS name or an IP address otherwise: a `.local` name is resolved
+over mDNS on every print, which needs avahi plus multicast on the current
+network and fails with `Name or service not known` where that is missing, for
+example inside a sandboxed terminal, on a VPN-only link, or on a server without
+`libnss-mdns`.
+
 Any IPP printer or CUPS queue that accepts `image/pwg-raster` works the same way
 (`ipp://localhost:631/printers/<queue>`). With `LABEL_PRINTER_URI` set, the label
 preview gains **Print on …** with a copies field, and the **Print label** dialog on
 an item page gains **Print now**. Leave the URI empty to hide both.
+
+### Printer on a laptop, app on a server in another network
+
+An mDNS name (`something.local`) only resolves inside one local network, and a
+laptop on a private network is not reachable from outside at all. If the server
+and the printer host sit in different networks, open a reverse SSH tunnel from
+the printer host instead, so the server prints to its own loopback:
+
+```bash
+# on the laptop the printer is paired with
+ssh -N -T -R 127.0.0.1:8631:127.0.0.1:8631 <user>@<server>
+```
+
+```
+# on the server, /opt/ost_inventory/.env
+LABEL_PRINTER_URI=ipp://localhost:8631/ipp/print/<logical-printer-name>
+```
+
+`deploy/systemd/label-printer-tunnel.service` is a user unit that keeps the
+tunnel up and reconnects; it is installed on the laptop, not on the server. The
+remote end binds loopback only, so only the server itself can print. Printing
+works while that laptop is awake and online, which is the price of hanging a
+production printer off a laptop. A small always-on machine next to the printer
+(USB or Bluetooth, running supvan-printer-app in the same network as the
+server) avoids both the tunnel and the dependency.
 
 Check connectivity and send a test label:
 
