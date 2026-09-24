@@ -18,6 +18,15 @@
 #        LABEL_PRINTER_URI=ipp://localhost:8631/ipp/print/<logical-printer-name>
 #      then: sudo systemctl restart ost-inventory
 #
+# On the SERVER, let sshd drop dead sessions, or a network change on the laptop
+# (other access point, VPN on/off) leaves port 8631 bound by a stale session
+# and every reconnect fails with "remote port forwarding failed for listen
+# port 8631". With the setting below the port frees itself after ~45 s:
+#   /etc/ssh/sshd_config.d/tunnel-keepalive.conf
+#     ClientAliveInterval 15
+#     ClientAliveCountMax 3
+#   sudo systemctl reload ssh
+#
 # The remote end binds 127.0.0.1 only, so no one outside the server can print.
 # Printing works while this laptop is awake, online and logged in; consider
 # `sudo loginctl enable-linger $USER` so the user services survive logout.

@@ -689,7 +689,7 @@ dd { margin: 0; }
 .pagination { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; }
 
 .login-shell {
-  min-height: calc(100vh - 6rem);
+  min-height: calc(100vh - 9rem);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -702,6 +702,17 @@ dd { margin: 0; }
   border-top: 3px solid var(--ost-accent);
 }
 .login-card h1 { margin-top: 0; }
+
+body > footer.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+  padding-top: 0.5rem;
+  padding-bottom: 1.25rem;
+  font-size: 0.8rem;
+}
+.site-footer a { color: var(--ost-muted); }
+.site-footer a:hover { color: var(--ost-ink); }
 
 .block-card,
 .form-section,

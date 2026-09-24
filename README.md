@@ -585,7 +585,18 @@ LABEL_PRINTER_URI=ipp://localhost:8631/ipp/print/<logical-printer-name>
 
 `deploy/systemd/label-printer-tunnel.service` is a user unit that keeps the
 tunnel up and reconnects; it is installed on the laptop, not on the server. The
-remote end binds loopback only, so only the server itself can print. Printing
+remote end binds loopback only, so only the server itself can print.
+
+When the laptop changes network (another access point, VPN on or off), the old
+connection dies without the server noticing, the port stays bound, and every
+reconnect fails with `remote port forwarding failed for listen port 8631`. Let
+sshd on the server drop dead sessions so the port frees itself within ~45 s:
+
+```
+# /etc/ssh/sshd_config.d/tunnel-keepalive.conf, then: sudo systemctl reload ssh
+ClientAliveInterval 15
+ClientAliveCountMax 3
+``` Printing
 works while that laptop is awake and online, which is the price of hanging a
 production printer off a laptop. A small always-on machine next to the printer
 (USB or Bluetooth, running supvan-printer-app in the same network as the
