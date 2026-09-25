@@ -310,7 +310,7 @@ class LabelsUiTests(TestCase):
         self.assertTrue(args[1].startswith(b"RaS2"))
         self.assertEqual(kwargs["document_format"], "image/pwg-raster")
         self.assertEqual(kwargs["copies"], 2)
-        self.assertEqual(kwargs["user_name"], "writer")
+        self.assertEqual(kwargs["user_name"], "inventory")
         self.assertEqual(kwargs["timeout"], 7)
         self.assertIn("40x30", kwargs["job_name"])
 

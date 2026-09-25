@@ -73,3 +73,18 @@ def process_item_photo(uploaded):
         size=buf.getbuffer().nbytes,
         charset=None,
     )
+
+
+def delete_photo_file(name, storage):
+    """Delete a stored item photo together with its easy-thumbnails variants."""
+    if not name:
+        return
+    from easy_thumbnails.files import get_thumbnailer
+
+    thumbnailer = get_thumbnailer(storage, relative_name=name)
+    source_cache = thumbnailer.get_source_cache()
+    if source_cache:
+        for thumbnail in source_cache.thumbnails.all():
+            thumbnailer.thumbnail_storage.delete(thumbnail.name)
+        source_cache.delete()  # cascades to the thumbnail cache rows
+    storage.delete(name)

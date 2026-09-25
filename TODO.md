@@ -109,42 +109,17 @@ Notes for whoever builds it:
 
 ## Data protection / retention
 
-**Status:** open. The central privacy policy
-(`/static/datenschutz.html#en-inventory` on the landing site) promises limited
-storage; the app does not enforce any retention yet.
+**Status:** done (2026-09). The central privacy policy
+(`/static/datenschutz.html#en-inventory` on the landing site) states the retention;
+README → *Data protection / retention* documents how it is enforced.
 
-- **Returned loans are kept forever**, including `borrower_name`,
-  `borrower_contact` and `note` (`Loan` in `inventory/models.py`, ~295-336).
-  Define a retention period (e.g. anonymise the borrower fields N months after
-  `returned_at`, keep item, dates and `recorded_by` for the history) and add a
-  management command plus a systemd timer next to `ost-inventory-reminders.timer`.
-  Update the policy text with the chosen period.
-- **Admin log contains borrower names.** `django_admin_log` stores
-  `object_repr`, which is `Loan.__str__` (`"<item> → <borrower_name>"`), and is
-  never pruned. The anonymisation command should also rewrite or delete old
-  `LogEntry` rows for loans (or prune `LogEntry` in general after N months).
-- **Expired sessions are never cleared.** Sessions expire after 12 h
-  (`SESSION_COOKIE_AGE`) but stay in `django_session`. Schedule
-  `manage.py clearsessions` (daily, same timer as above is fine).
-- **Photos of deleted items stay on disk.** `item_delete` deletes the row but
-  nothing removes the file under `media/items/` or its easy-thumbnails
-  variants; there is no `post_delete` signal. The photo view (`item_photo`)
-  deletes a replaced original but not its thumbnails — check the edit form's
-  clear/replace path too. Add a `post_delete` handler (after commit, using
-  `get_thumbnailer(...).delete(save=False)` or `delete_thumbnails()`) and a
-  one-off cleanup for orphaned files.
-- **Gunicorn access log contains query strings**, e.g.
-  `GET /inventory/loans/history/?q=<borrower name>`, and goes to journald
-  (`--access-logfile -` in `deploy/systemd/ost-inventory.service`). Either make
-  sure journald keeps it no longer than the policy says (7 days,
-  `MaxRetentionSec=7day` in `journald.conf` or a drop-in) or set
-  `--access-logformat` without `%(q)s` / use `%(U)s` instead of `%(r)s`.
-- **IPP print jobs carry the username.** `labels_print` passes
-  `request.user.get_username()` as `requesting-user-name`
-  (`inventory/views/extras.py`, `inventory/printing.py` ~261), so it ends up
-  in the job history of the label-printer laptop. Consider a neutral value
-  such as `"inventory"`.
-- **Reminder failures may log addresses.** `send_overdue_reminders` logs
-  failures with `logger.exception`; SMTP errors (e.g. `SMTPRecipientsRefused`)
-  include the recipient addresses in the traceback. Log the exception class
-  and loan id only, or accept that and cover it by the journald retention.
+- [x] Returned loans anonymised 1 year after `returned_at` (`LOAN_RETENTION_DAYS=365`):
+  borrower name, contact and note; item, dates and `recorded_by` stay —
+  `manage.py purge_personal_data`, timer `ost-inventory-purge` (daily 03:30)
+- [x] Admin log (`django_admin_log.object_repr`) of those loans rewritten by the same command
+- [x] Expired sessions cleared by the same command
+- [x] Photos + thumbnails removed after item delete / photo replace or clear
+  (`inventory/signals.py`); leftovers once via `manage.py cleanup_orphan_photos`
+- [x] Gunicorn access log with query strings: covered by journald retention (7 days)
+- [x] IPP print jobs send `requesting-user-name` `inventory` instead of the username
+- [x] Failed reminders log loan id + exception class only (no recipient addresses)

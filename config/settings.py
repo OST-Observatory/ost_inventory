@@ -136,6 +136,11 @@ LOGIN_MAX_FAILURES = 5
 LOGIN_FAILURE_WINDOW = 600
 LOGIN_LOCKOUT_SECONDS = 900
 
+# Returned loans keep item and dates, but borrower name/contact/note are anonymised this many
+# days after the return (`manage.py purge_personal_data`, daily timer). Stated in the central
+# privacy policy (landing page, #inventory) — change both together.
+LOAN_RETENTION_DAYS = env.int("LOAN_RETENTION_DAYS", default=365)
+
 THUMBNAIL_ALIASES = {
     "": {
         "list": {"size": (72, 72), "crop": True},

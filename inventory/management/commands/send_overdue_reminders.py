@@ -65,9 +65,10 @@ class Command(BaseCommand):
                 loan.last_reminder_sent_at = timezone.now()
                 loan.save(update_fields=["last_reminder_sent_at"])
                 sent += 1
-            except Exception:
+            except Exception as exc:
                 failed += 1
-                logger.exception("Reminder failed for loan %s", loan.pk)
+                # No traceback: SMTP errors carry the recipient addresses.
+                logger.error("Reminder failed for loan %s: %s", loan.pk, type(exc).__name__)
                 self.stderr.write(f"Loan {loan.pk}: send failed")
 
         self.stdout.write(self.style.SUCCESS(f"Reminders sent: {sent}"))

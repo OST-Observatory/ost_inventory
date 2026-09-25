@@ -310,7 +310,9 @@ class ReminderTests(TestCase):
         mocked.side_effect = _send
         err = StringIO()
         out = StringIO()
-        call_command("send_overdue_reminders", stdout=out, stderr=err)
+        with self.assertLogs("inventory.management.commands.send_overdue_reminders", "ERROR") as logs:
+            call_command("send_overdue_reminders", stdout=out, stderr=err)
+        self.assertNotIn("@", "\n".join(logs.output))  # no recipient addresses in the journal
         self.loan_ok.refresh_from_db()
         self.loan_bad.refresh_from_db()
         self.assertIsNotNone(self.loan_ok.last_reminder_sent_at)

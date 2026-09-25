@@ -234,7 +234,8 @@ def labels_print(request):
             document,
             document_format=PWG_RASTER_FORMAT,
             job_name=f"OST labels {size.key} x{len(jobs)}",
-            user_name=request.user.get_username(),
+            # Neutral on purpose: the printer laptop keeps a job history.
+            user_name="inventory",
             copies=copies,
             timeout=getattr(settings, "LABEL_PRINTER_TIMEOUT", 30),
         )

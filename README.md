@@ -424,10 +424,12 @@ sudo cp /opt/ost_inventory/deploy/systemd/ost-inventory.socket \
         /opt/ost_inventory/deploy/systemd/ost-inventory.service \
         /opt/ost_inventory/deploy/systemd/ost-inventory-reminders.service \
         /opt/ost_inventory/deploy/systemd/ost-inventory-reminders.timer \
+        /opt/ost_inventory/deploy/systemd/ost-inventory-purge.service \
+        /opt/ost_inventory/deploy/systemd/ost-inventory-purge.timer \
         /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now ost-inventory.socket ost-inventory.service
-sudo systemctl enable --now ost-inventory-reminders.timer
+sudo systemctl enable --now ost-inventory-reminders.timer ost-inventory-purge.timer
 sudo systemctl status ost-inventory.socket ost-inventory.service
 ```
 
@@ -452,6 +454,31 @@ Reminders run at 08:00 local time (`OnCalendar` in the timer). Test first:
 sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py send_overdue_reminders --dry-run
 sudo systemctl start ost-inventory-reminders.service
 ```
+
+#### Data protection / retention
+
+The central privacy policy (landing page, `static/datenschutz.html#inventory`) states how long
+personal data is kept; change both together.
+
+- **Loans:** `purge_personal_data` (timer `ost-inventory-purge`, daily 03:30) anonymises loans
+  returned more than `LOAN_RETENTION_DAYS` ago (default 365): borrower name becomes
+  `(anonymised)`, contact and note are cleared; item, dates and `recorded_by` stay. Admin log
+  entries of those loans (and of loans deleted before the cutoff) lose the borrower name too.
+  The same command clears expired sessions. Preview:
+
+  ```bash
+  sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py purge_personal_data --dry-run
+  ```
+
+- **Photos:** deleting an item or replacing/clearing its photo removes the file and its
+  thumbnails after commit (`inventory/signals.py`). Files left over from before that are
+  removed once with `manage.py cleanup_orphan_photos --dry-run` / without `--dry-run`.
+- **Label printing** sends the neutral user name `inventory` with each IPP job, not the
+  account name.
+- **Logs:** the Gunicorn access log contains query strings (e.g. loan-history searches) and goes
+  to journald, which the server keeps for 7 days, as the policy states. Set
+  `MaxRetentionSec=7day` in `/etc/systemd/journald.conf` (or a drop-in) again if the host
+  changes. Failed reminders log only the loan id and the exception class, no addresses.
 
 ### 10. Apache and TLS
 

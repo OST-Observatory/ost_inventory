@@ -358,12 +358,10 @@ def item_photo(request, pk):
         message = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
         messages.error(request, message)
         return redirect("inventory:item_detail", pk=pk)
-    old_name = item.photo.name if item.photo else ""
     item.photo = processed
     item.updated_by = request.user
+    # The replaced file and its thumbnails are removed by inventory.signals.
     item.save(update_fields=["photo", "updated_by", "updated_at"])
-    if old_name and old_name != item.photo.name:
-        item.photo.storage.delete(old_name)
     messages.success(request, "Photo saved.")
     return redirect("inventory:item_detail", pk=pk)
 
