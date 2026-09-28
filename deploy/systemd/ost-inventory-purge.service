@@ -1,5 +1,5 @@
 [Unit]
-Description=OST Inventory: anonymise old loans, clear expired sessions
+Description=OST Inventory: anonymise old loans, clear expired sessions, deactivate departed LDAP accounts
 After=network.target
 
 [Service]
@@ -15,6 +15,7 @@ StandardOutput=journal
 StandardError=journal
 SyslogLevelPrefix=true
 ExecStart=/opt/ost_inventory/.venv/bin/python manage.py purge_personal_data
+ExecStart=/opt/ost_inventory/.venv/bin/python manage.py deactivate_departed_ldap_users
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

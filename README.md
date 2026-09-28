@@ -470,6 +470,15 @@ personal data is kept; change both together.
   sudo -u www-data /opt/ost_inventory/.venv/bin/python manage.py purge_personal_data --dry-run
   ```
 
+- **Departed members:** `deactivate_departed_ldap_users` (same timer, after the purge) checks every
+  active LDAP account (no usable local password) against `LDAP_USER_SEARCH_BASE` /
+  `LDAP_USER_FILTER`. Accounts whose entry is gone are deactivated and lose first name, last name
+  and e-mail; the username stays for the history. Local emergency admins are never touched. Any
+  LDAP error aborts without changes (the timer run then fails and shows up in
+  `systemctl --failed`); if more than half of the accounts (and more than 3) would be deactivated
+  at once, it stops as well — check the search settings, then run it once by hand with `--force`.
+  Someone who comes back is reactivated by an admin (Django admin → Users → active). Preview:
+  `manage.py deactivate_departed_ldap_users --dry-run`.
 - **Photos:** deleting an item or replacing/clearing its photo removes the file and its
   thumbnails after commit (`inventory/signals.py`). Files left over from before that are
   removed once with `manage.py cleanup_orphan_photos --dry-run` / without `--dry-run`.
