@@ -457,3 +457,15 @@ class CookieNameTests(TestCase):
         prod = load("")
         self.assertFalse(hasattr(prod, "SESSION_COOKIE_PATH"))
         self.assertFalse(hasattr(prod, "CSRF_COOKIE_PATH"))
+
+
+class CookieLifetimeTests(TestCase):
+    """Central privacy policy (#inventory): session 12 h, CSRF cookie per browser session."""
+
+    def test_session_and_csrf_cookie_lifetimes(self):
+        self.assertLessEqual(settings.SESSION_COOKIE_AGE, 12 * 60 * 60)
+        self.assertIsNone(settings.CSRF_COOKIE_AGE)
+        response = self.client.get(reverse("login"))
+        cookie = response.cookies[settings.CSRF_COOKIE_NAME]
+        self.assertEqual(cookie["max-age"], "")
+        self.assertEqual(cookie["expires"], "")

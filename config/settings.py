@@ -99,6 +99,9 @@ LOGOUT_REDIRECT_URL = "login"
 SESSION_COOKIE_NAME = "ost_inventory_sessionid"
 CSRF_COOKIE_NAME = "ost_inventory_csrftoken"
 SESSION_COOKIE_AGE = 60 * 60 * 12
+# CSRF cookie only for the browser session (Django default: one year); stated in the central
+# privacy policy (landing page, #inventory).
+CSRF_COOKIE_AGE = None
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
