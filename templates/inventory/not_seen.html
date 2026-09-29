@@ -13,7 +13,7 @@
     <tbody>
       {% for item in items %}
       <tr>
-        <td><a href="{% url 'inventory:item_detail' item.pk }}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
+        <td><a href="{% url 'inventory:item_detail' item.pk %}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
         <td><a href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a></td>
         <td>
           <a href="{% url 'inventory:location_detail' item.location_id %}">{{ item.location.path_display }}</a>

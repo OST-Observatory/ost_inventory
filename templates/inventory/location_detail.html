@@ -25,7 +25,7 @@
     <tbody>
       {% for item in items %}
       <tr>
-        <td><a href="{% url 'inventory:item_detail' item.pk }}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
+        <td><a href="{% url 'inventory:item_detail' item.pk %}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
         <td><a href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a></td>
         <td>{{ item.location.path_display }}{% if item.installed_in %} · mounted on {{ item.installed_in.inventory_number }} {{ item.installed_in.name }}{% endif %}{% if item.container %} · {{ item.container }}{% endif %}</td>
       </tr>

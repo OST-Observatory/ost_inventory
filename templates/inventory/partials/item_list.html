@@ -6,7 +6,7 @@
   <p class="result-meta">
     <span class="muted">{{ page_obj.paginator.count }} item{{ page_obj.paginator.count|pluralize }}</span>
   </p>
-  <table>
+  <table class="item-table">
     <thead>
       <tr>
         <th></th>
@@ -26,23 +26,23 @@
             <img src="{% thumbnail item.photo "list" %}" alt="">
           {% endif %}
         </td>
-        <td>
-          <a href="{% url 'inventory:item_detail' item.pk }}"><span class="inv-badge">{{ item.inventory_number }}</span></a>
+        <td class="col-number">
+          <a href="{% url 'inventory:item_detail' item.pk %}"><span class="inv-badge">{{ item.inventory_number }}</span></a>
         </td>
-        <td><a href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a>{% if item.project %}<div class="muted">{{ item.project.name }}</div>{% endif %}</td>
-        <td>
+        <td class="col-name"><a href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a>{% if item.project %}<div class="muted">{{ item.project.name }}</div>{% endif %}</td>
+        <td class="col-location">
           <a href="{% url 'inventory:location_detail' item.location_id %}">{{ item.location.path_display }}</a>
           {% if item.installed_in %}<div class="muted">mounted on {{ item.installed_in.inventory_number }} {{ item.installed_in.name }}</div>{% endif %}
           {% if item.container %}<div class="muted">in {{ item.container }}</div>{% endif %}
         </td>
-        <td>{% for c in item.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-        <td>
+        <td class="col-categories">{% for c in item.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td class="col-status">
           <span id="item-status-{{ item.pk }}" class="status-cell">
             {% include "inventory/partials/status_chip.html" %}
           </span>
         </td>
         {% if can_write %}
-        <td>
+        <td class="col-actions">
           <form method="post" action="{% url 'inventory:still_here' item.pk %}" class="inline"
                 hx-post="{% url 'inventory:still_here' item.pk %}"
                 hx-target="#item-status-{{ item.pk }}"

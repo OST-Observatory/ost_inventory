@@ -138,7 +138,7 @@
     <tbody>
       {% for item in report.missing %}
       <tr>
-        <td><a href="{% url 'inventory:item_detail' item.pk }}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
+        <td><a href="{% url 'inventory:item_detail' item.pk %}"><span class="inv-badge">{{ item.inventory_number }}</span></a></td>
         <td>{{ item.name }}</td>
         <td>{{ item.location.path_display }}</td>
       </tr>

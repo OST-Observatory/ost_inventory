@@ -829,6 +829,58 @@ body > footer.site-footer {
 .status-cell { display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start; }
 .still-here-mini { font-size: 0.8rem; padding: 0.2rem 0.45rem; }
 
+/* Item list: on portrait phones each row becomes a stacked card. */
+@media (max-width: 39.99rem) {
+  .item-table,
+  .item-table tbody { display: block; }
+  .item-table thead { display: none; }
+  .item-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "number     status"
+      "name       name"
+      "location   location"
+      "categories actions";
+    gap: 0.2rem 0.75rem;
+    align-items: start;
+    padding: 0.7rem 0;
+  }
+  .item-table tr:has(.thumb img) {
+    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "thumb number     status"
+      "thumb name       name"
+      "thumb location   location"
+      "thumb categories actions";
+  }
+  .item-table tr:first-child { padding-top: 0; }
+  .item-table tr:last-child { border-bottom: 0; padding-bottom: 0; }
+  .item-table td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .item-table .thumb { display: none; grid-area: thumb; }
+  .item-table tr:has(.thumb img) .thumb { display: block; }
+  .item-table .thumb img { width: 3.5rem; height: 3.5rem; }
+  .item-table .col-number { grid-area: number; }
+  .item-table .col-name { grid-area: name; font-weight: 600; }
+  .item-table .col-name .muted { font-weight: 400; }
+  .item-table .col-location { grid-area: location; font-size: 0.9rem; }
+  .item-table .col-categories {
+    grid-area: categories;
+    align-self: center;
+    font-size: 0.85rem;
+    color: var(--ost-muted);
+  }
+  .item-table .col-status { grid-area: status; justify-self: end; }
+  .item-table .col-status .status-cell { align-items: flex-end; }
+  .item-table .col-actions { grid-area: actions; width: auto; }
+}
+
 .acl-table-wrap {
   overflow-x: auto;
   margin: 0 0 1rem;
