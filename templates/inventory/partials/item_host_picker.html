@@ -7,11 +7,17 @@
     <input
       type="search"
       data-host-search
-      placeholder="Search name or #0012…"
+      placeholder="Name or #0012…"
       autocomplete="off"
       aria-label="{{ search_label|default:'Search host item' }}"
     >
+    <button type="button" class="outline secondary" data-host-scan hidden>Scan label</button>
+    <button type="button" class="outline secondary" data-host-scan-stop hidden>Stop camera</button>
   </p>
+  <div class="stocktake-camera" data-host-camera data-hide-idle hidden>
+    <video playsinline autoplay muted></video>
+  </div>
+  <p class="field-hint" data-host-scan-status hidden></p>
   <div class="item-host-results" hidden></div>
   {{ field }}
   {{ field.errors }}

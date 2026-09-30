@@ -50,6 +50,7 @@ def _item_payload(user, pk: int) -> dict | None:
         return None
     return {
         "kind": "item",
+        "id": item.pk,
         "label": f"{item.inventory_number} {item.name}",
         "url": reverse("inventory:item_detail", args=[item.pk]),
         "short_url": reverse("item_short", args=[item.pk]),
@@ -62,6 +63,7 @@ def _location_payload(pk: int) -> dict | None:
         return None
     return {
         "kind": "location",
+        "id": loc.pk,
         "label": loc.path_display(),
         "url": reverse("inventory:location_detail", args=[loc.pk]),
         "short_url": reverse("location_short", args=[loc.pk]),

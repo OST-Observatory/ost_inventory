@@ -513,7 +513,7 @@ form.block-card > button,
 .ost-dialog .label-code-grid { margin-bottom: 1rem; }
 .ost-dialog .actions-row { margin: 0; }
 .ost-dialog form.toolbar { margin: 0; }
-dialog.ost-dialog:has(.stocktake-camera)[open] {
+dialog.ost-dialog:has(> .stocktake-camera)[open] {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -521,7 +521,7 @@ dialog.ost-dialog:has(.stocktake-camera)[open] {
   padding: 1rem 1rem 1.15rem;
 }
 @media (max-width: 39.99rem) {
-  dialog.ost-dialog:has(.stocktake-camera)[open] {
+  dialog.ost-dialog:has(> .stocktake-camera)[open] {
     width: 100vw;
     max-width: 100vw;
     height: 100dvh;
@@ -531,11 +531,11 @@ dialog.ost-dialog:has(.stocktake-camera)[open] {
     padding: 0.85rem 0.85rem 1.15rem;
     overflow: auto;
   }
-  dialog.ost-dialog:has(.stocktake-camera)[open] .stocktake-camera {
+  dialog.ost-dialog:has(> .stocktake-camera)[open] .stocktake-camera {
     flex: 1 1 auto;
     min-height: 0;
   }
-  dialog.ost-dialog:has(.stocktake-camera)[open] .stocktake-camera video {
+  dialog.ost-dialog:has(> .stocktake-camera)[open] .stocktake-camera video {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -1215,3 +1215,8 @@ form.add-inline > button {
   font-weight: 500;
 }
 .item-host-picker select { margin-bottom: 0; }
+.item-host-picker .stocktake-camera { margin: 0 0 0.55rem; }
+.item-host-picker .stocktake-camera video {
+  max-height: min(40dvh, 16rem);
+  aspect-ratio: 4 / 3;
+}

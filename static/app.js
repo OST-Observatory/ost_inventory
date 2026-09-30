@@ -299,9 +299,9 @@ function lookupScannedCode(raw, onHit, onMiss) {
 }
 
 function bindVideoScanner(opts) {
-  var video = document.getElementById(opts.videoId);
-  var startBtn = document.getElementById(opts.startId);
-  var stopBtn = document.getElementById(opts.stopId);
+  var video = opts.video || document.getElementById(opts.videoId);
+  var startBtn = opts.startBtn || document.getElementById(opts.startId);
+  var stopBtn = opts.stopBtn || document.getElementById(opts.stopId);
   var statusEl = opts.statusId ? document.getElementById(opts.statusId) : null;
   if (!video || !startBtn) {
     return null;
@@ -328,6 +328,9 @@ function bindVideoScanner(opts) {
   function setLive(on) {
     if (stage) {
       stage.classList.toggle("is-live", on);
+      if (stage.hasAttribute("data-hide-idle")) {
+        stage.hidden = !on;
+      }
     }
   }
 
@@ -373,10 +376,19 @@ function bindVideoScanner(opts) {
     lookupScannedCode(
       raw,
       function (data) {
-        goTo(data);
+        if (!opts.onHit) {
+          goTo(data);
+        } else if (opts.onHit(data)) {
+          stop();
+        } else {
+          inflight = false;
+        }
       },
       function () {
         inflight = false;
+        if (opts.onMiss) {
+          opts.onMiss();
+        }
       }
     );
   }
@@ -586,6 +598,7 @@ function bindItemHostPickers() {
     }
     var timer = null;
     var exclude = picker.getAttribute("data-exclude") || "";
+    var scanStatus = picker.querySelector("[data-host-scan-status]");
 
     function setHost(id, label) {
       var value = id ? String(id) : "";
@@ -633,6 +646,48 @@ function bindItemHostPickers() {
         results.appendChild(btn);
       });
       results.hidden = false;
+    }
+
+    function sayScan(text) {
+      if (scanStatus) {
+        scanStatus.textContent = text;
+        scanStatus.hidden = !text;
+      }
+    }
+
+    var scanBtn = picker.querySelector("[data-host-scan]");
+    if (scanBtn && "BarcodeDetector" in window && navigator.mediaDevices) {
+      var stopScan = bindVideoScanner({
+        video: picker.querySelector("[data-host-camera] video"),
+        startBtn: scanBtn,
+        stopBtn: picker.querySelector("[data-host-scan-stop]"),
+        onHit: function (data) {
+          if (data.kind !== "item" || !data.id) {
+            sayScan("That is a location label. Scan an item label.");
+            return false;
+          }
+          if (String(data.id) === exclude) {
+            sayScan("That is this item itself. Scan another label.");
+            return false;
+          }
+          setHost(data.id, data.label);
+          sayScan("Selected " + data.label + ".");
+          return true;
+        },
+        onMiss: function () {
+          sayScan("No matching item. Try another label.");
+        },
+      });
+      if (stopScan) {
+        scanBtn.hidden = false;
+        scanBtn.addEventListener("click", function () {
+          sayScan("");
+        });
+        var dialog = picker.closest("dialog");
+        if (dialog) {
+          dialog.addEventListener("close", stopScan);
+        }
+      }
     }
 
     search.addEventListener("input", function () {

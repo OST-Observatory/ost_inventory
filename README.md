@@ -14,7 +14,9 @@ matching (`pg_trgm`). SQLite (development) uses case-insensitive contains.
 - **Items** — room plus optional place (e.g. `PRA / 2a`), 1–4 categories,
 optional project and container, quantity (exact or approximate), description,
 comment, photo. **Mounted on** links an item to a host (e.g. a camera on a
-telescope); the mounted item then follows the host’s location.
+telescope); the mounted item then follows the host’s location. Wherever an
+item is picked (**Mount on…**, **Split off…**, **Same type as…**, edit form),
+**Scan label** reads the other item’s QR code or barcode with the camera.
 - **Several units** — track interchangeable things (cables, adapters, screws)
 as one item per location with a quantity; give anything that is lent, mounted,
 or has a serial number its own item. **Split off…** on the item page moves some

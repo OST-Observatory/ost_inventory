@@ -686,6 +686,7 @@ class ScanLookupTests(TestCase):
             self.assertEqual(resp.status_code, 200, q)
             data = resp.json()
             self.assertEqual(data["kind"], "item")
+            self.assertEqual(data["id"], self.item.pk)
             self.assertEqual(data["url"], reverse("inventory:item_detail", args=[self.item.pk]))
             self.assertEqual(data["short_url"], reverse("item_short", args=[self.item.pk]))
 
@@ -915,6 +916,8 @@ class InstalledInTests(TestCase):
         detail = self.client.get(reverse("inventory:item_detail", args=[self.camera.pk]))
         self.assertContains(detail, "Mount on…")
         self.assertContains(detail, "install-in-dialog")
+        self.assertContains(detail, "data-host-scan")
+        self.assertContains(detail, "data-host-camera")
 
     def test_host_lookup_excludes_self_and_matches_name(self):
         resp = self.client.get(
