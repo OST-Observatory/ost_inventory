@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 
@@ -272,6 +273,12 @@ class ItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["quantity"].required = True
         self.fields["quantity_is_approximate"].label = "Approximate count"
+        self.fields["photo"].widget.attrs.update(
+            {
+                "data-photo-max-bytes": settings.PHOTO_MAX_BYTES,
+                "data-photo-max-dim": settings.PHOTO_MAX_DIMENSION,
+            }
+        )
         self.fields["room"].required = False
         configure_room_place_fields(self, getattr(self.instance, "location", None))
         if self.instance and self.instance.pk:

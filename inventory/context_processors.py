@@ -27,4 +27,6 @@ def nav(request):
         "current_url_namespace": getattr(match, "namespace", "") or "",
         "active_stocktake_id": active_id,
         "label_printer_name": printer_name,
+        "photo_max_bytes": settings.PHOTO_MAX_BYTES,
+        "photo_max_dimension": settings.PHOTO_MAX_DIMENSION,
     }

@@ -131,6 +131,8 @@ CSV_IMPORT_MAX_FIELD_LENGTH = 500
 CSV_IMPORT_MAX_LOCATION_DEPTH = 2
 
 PHOTO_MAX_BYTES = 5 * 1024 * 1024
+# Larger uploads (no JavaScript) are reduced on the server; keep <= Apache LimitRequestBody.
+PHOTO_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 PHOTO_MAX_PIXELS = 20_000_000
 PHOTO_MAX_DIMENSION = 4096
 PHOTO_ALLOWED_FORMATS = frozenset({"JPEG", "PNG", "WEBP"})

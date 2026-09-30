@@ -105,6 +105,7 @@
       <label>Comment {{ form.comment }}{{ form.comment.errors }}</label>
     </div>
     <label>Photo {{ form.photo }}{{ form.photo.errors }}</label>
+    <p class="field-hint">JPEG, PNG, or WebP. Photos over {{ photo_max_bytes|filesizeformat }} are reduced before upload; you can check the result first.</p>
   </section>
 
   <p class="actions-row">

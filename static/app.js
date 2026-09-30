@@ -734,26 +734,174 @@ function bindDialogs() {
   });
 }
 
+var PHOTO_JPEG_QUALITIES = [0.92, 0.85, 0.75, 0.65];
+var PHOTO_MIN_DIMENSION = 800;
+
+function formatMegabytes(bytes) {
+  return (bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, "") + " MB";
+}
+
+function canvasToJpeg(canvas, quality) {
+  return new Promise(function (resolve, reject) {
+    canvas.toBlob(
+      function (blob) {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error("JPEG encoding failed"));
+        }
+      },
+      "image/jpeg",
+      quality
+    );
+  });
+}
+
+// Re-encode a photo as JPEG until it fits maxBytes: first lower the quality,
+// then the resolution. Resolves {blob, width, height}.
+function reducePhoto(file, maxBytes, maxDim) {
+  return createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bitmap) {
+    function attempt(scale) {
+      var width = Math.round(bitmap.width * scale);
+      var height = Math.round(bitmap.height * scale);
+      var canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0, width, height);
+
+      function tryQuality(index) {
+        return canvasToJpeg(canvas, PHOTO_JPEG_QUALITIES[index]).then(function (blob) {
+          if (blob.size <= maxBytes) {
+            return { blob: blob, width: width, height: height };
+          }
+          if (index + 1 < PHOTO_JPEG_QUALITIES.length) {
+            return tryQuality(index + 1);
+          }
+          if (Math.max(width, height) <= PHOTO_MIN_DIMENSION) {
+            throw new Error("photo does not fit");
+          }
+          return attempt(scale * 0.8);
+        });
+      }
+      return tryQuality(0);
+    }
+    var first = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    return attempt(first).finally(function () {
+      bitmap.close();
+    });
+  });
+}
+
+function blobToDataUrl(blob) {
+  // data: rather than blob: URLs, which the CSP (img-src 'self' data:) blocks.
+  return new Promise(function (resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      resolve(reader.result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function confirmReducedPhoto(original, result, maxBytes) {
+  return blobToDataUrl(result.blob).then(function (url) {
+    return new Promise(function (resolve) {
+      var dialog = document.createElement("dialog");
+      dialog.className = "ost-dialog";
+      var form = document.createElement("form");
+      form.method = "dialog";
+      var title = document.createElement("h2");
+      title.textContent = "Photo reduced";
+      var text = document.createElement("p");
+      text.className = "muted";
+      text.textContent =
+        "The photo was " + formatMegabytes(original.size) + ", more than the " +
+        formatMegabytes(maxBytes) + " limit. It was reduced to " +
+        formatMegabytes(result.blob.size) + " (" + result.width + " × " + result.height +
+        " px). Check the quality before saving.";
+      var img = document.createElement("img");
+      img.className = "photo-preview";
+      img.alt = "Reduced photo";
+      img.src = url;
+      var actions = document.createElement("p");
+      actions.className = "actions-row";
+      var useBtn = document.createElement("button");
+      useBtn.value = "use";
+      useBtn.textContent = "Use photo";
+      var cancelBtn = document.createElement("button");
+      cancelBtn.value = "cancel";
+      cancelBtn.className = "outline secondary";
+      cancelBtn.textContent = "Cancel";
+      actions.append(useBtn, cancelBtn);
+      form.append(title, text, img, actions);
+      dialog.appendChild(form);
+      dialog.addEventListener("close", function () {
+        dialog.remove();
+        resolve(dialog.returnValue === "use");
+      });
+      document.body.appendChild(dialog);
+      dialog.showModal();
+    });
+  });
+}
+
 function bindPhotoCapture() {
   document.addEventListener("change", function (event) {
-    var input = event.target.closest(".js-photo-capture input[type='file']");
+    var input = event.target.closest("input[type='file'][data-photo-max-bytes]");
     if (!input || !input.files || !input.files.length) {
       return;
     }
-    var form = input.form;
-    if (!form) {
+    // On the item page, choosing a photo saves it at once; in forms it waits for Save.
+    var form = input.closest(".js-photo-capture") ? input.form : null;
+    if (form) {
+      var message = form.getAttribute("data-confirm");
+      if (message && !window.confirm(message)) {
+        input.value = "";
+        return;
+      }
+    }
+    function submit() {
+      if (!form) {
+        return;
+      }
+      if (form.requestSubmit) {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
+    }
+    var file = input.files[0];
+    var maxBytes = parseInt(input.getAttribute("data-photo-max-bytes"), 10) || 0;
+    var maxDim = parseInt(input.getAttribute("data-photo-max-dim"), 10) || 4096;
+    if (!maxBytes || file.size <= maxBytes || !window.createImageBitmap || !window.DataTransfer) {
+      submit();
       return;
     }
-    var message = form.getAttribute("data-confirm");
-    if (message && !window.confirm(message)) {
-      input.value = "";
-      return;
-    }
-    if (form.requestSubmit) {
-      form.requestSubmit();
-    } else {
-      form.submit();
-    }
+    reducePhoto(file, maxBytes, maxDim)
+      .then(function (result) {
+        return confirmReducedPhoto(file, result, maxBytes).then(function (accepted) {
+          if (!accepted) {
+            input.value = "";
+            return;
+          }
+          var name = (file.name || "photo").replace(/\.[^.]*$/, "") + ".jpg";
+          var transfer = new DataTransfer();
+          transfer.items.add(new File([result.blob], name, { type: "image/jpeg" }));
+          input.files = transfer.files;
+          submit();
+        });
+      })
+      .catch(function () {
+        input.value = "";
+        window.alert(
+          "This photo could not be reduced below " + formatMegabytes(maxBytes) +
+          ". Choose a smaller photo."
+        );
+      });
   });
 }
 

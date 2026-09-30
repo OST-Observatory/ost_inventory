@@ -32,6 +32,7 @@
       {% csrf_token %}
       <label class="photo-capture">
         <input type="file" name="photo" accept="image/*" capture="environment"
+               data-photo-max-bytes="{{ photo_max_bytes }}" data-photo-max-dim="{{ photo_max_dimension }}"
                aria-label="{% if item.photo %}Replace photo{% else %}Take photo{% endif %}">
         {% if item.photo %}Replace photo{% else %}Take photo{% endif %}
       </label>

@@ -1331,3 +1331,81 @@ class SameTypeTests(TestCase):
             reverse("inventory:item_merge", args=[other.pk]), {"merge-into": self.stock.pk}
         )
         self.assertEqual(resp.status_code, 403)
+
+
+class PhotoReductionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="writer", password="x", is_supervisor=True
+        )
+        self.item = Item.objects.create(
+            name="Camera body",
+            location=Location.objects.create(name="Lab"),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client = Client()
+        self.client.login(username="writer", password="x")
+
+    def _noisy_jpeg(self, size=1200):
+        # Random pixels compress badly, so the file is large for its dimensions.
+        import os
+
+        img = Image.frombytes("RGB", (size, size), os.urandom(size * size * 3))
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=95)
+        return buf.getvalue()
+
+    def test_oversize_photo_is_reduced_to_fit(self):
+        from django.test import override_settings
+
+        from inventory.images import process_item_photo
+
+        data = self._noisy_jpeg()
+        limit = len(data) // 4
+        with override_settings(PHOTO_MAX_BYTES=limit, PHOTO_MAX_UPLOAD_BYTES=len(data)):
+            processed = process_item_photo(
+                SimpleUploadedFile("big.jpg", data, content_type="image/jpeg")
+            )
+        self.assertTrue(processed.was_reduced)
+        self.assertLessEqual(processed.size, limit)
+        processed.seek(0)
+        with Image.open(processed) as img:
+            self.assertEqual(img.format, "JPEG")
+
+    def test_small_photo_is_not_marked_reduced(self):
+        from inventory.images import process_item_photo
+
+        processed = process_item_photo(
+            SimpleUploadedFile("ok.jpg", self._noisy_jpeg(40), content_type="image/jpeg")
+        )
+        self.assertFalse(processed.was_reduced)
+
+    def test_detail_upload_warns_when_reduced(self):
+        from tempfile import TemporaryDirectory
+
+        from django.test import override_settings
+
+        data = self._noisy_jpeg()
+        with TemporaryDirectory() as tmp, override_settings(
+            MEDIA_ROOT=tmp,
+            PHOTO_MAX_BYTES=len(data) // 4,
+            PHOTO_MAX_UPLOAD_BYTES=len(data),
+        ):
+            resp = self.client.post(
+                reverse("inventory:item_photo", args=[self.item.pk]),
+                {"photo": SimpleUploadedFile("big.jpg", data, content_type="image/jpeg")},
+                follow=True,
+            )
+            self.item.refresh_from_db()
+            self.assertTrue(self.item.photo)
+            self.assertLessEqual(self.item.photo.size, len(data) // 4)
+        self.assertContains(resp, "had to be reduced")
+
+    def test_photo_inputs_carry_size_limit_for_browser_reduction(self):
+        detail = self.client.get(reverse("inventory:item_detail", args=[self.item.pk]))
+        self.assertContains(detail, 'data-photo-max-bytes="5242880"')
+        self.assertContains(detail, 'data-photo-max-dim="4096"')
+        edit = self.client.get(reverse("inventory:item_edit", args=[self.item.pk]))
+        self.assertContains(edit, 'data-photo-max-bytes="5242880"')
+        self.assertContains(edit, "are reduced before upload")

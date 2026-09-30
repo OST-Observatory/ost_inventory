@@ -596,6 +596,15 @@ dialog.ost-dialog:has(> .stocktake-camera)[open] {
 }
 
 .detail-photo { max-width: 100%; height: auto; border-radius: 0.4rem; }
+.photo-preview {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: min(55dvh, 28rem);
+  margin: 0 auto 1rem;
+  border-radius: 0.4rem;
+}
 .thumb img { width: 72px; height: 72px; object-fit: cover; border-radius: 0.3rem; }
 
 table {

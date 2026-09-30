@@ -241,7 +241,7 @@ class PhotoLimitTests(TestCase):
             "comment": "",
         }
         photo = SimpleUploadedFile("big.jpg", buf.getvalue(), content_type="image/jpeg")
-        with override_settings(PHOTO_MAX_BYTES=10):
+        with override_settings(PHOTO_MAX_UPLOAD_BYTES=10):
             form = ItemForm(data=data, files={"photo": photo})
             self.assertFalse(form.is_valid())
             self.assertIn("photo", form.errors)

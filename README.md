@@ -27,7 +27,10 @@ grouped as **Same type**; the item page lists all units and their total, and
 to another one of the same type (e.g. after unmounting) and deactivates it.
 - **Photos** — upload on create/edit, or **Take photo** / **Replace photo** on
 the item page (rear camera on a phone). JPEG, PNG, and WebP; max 5 MB; images
-are re-encoded and stored under UUID names.
+are re-encoded and stored under UUID names. Larger photos are reduced in the
+browser before upload (lower JPEG quality first, then resolution) and shown for
+confirmation. Without JavaScript the server reduces uploads up to
+`PHOTO_MAX_UPLOAD_BYTES` (8 MB, the Apache `LimitRequestBody`) and says so.
 - **Loans** — one open loan per item, due date, optional borrower contact.
 Borrower name and contact are hidden unless the user has that permission.
 Overdue reminders can be sent daily.

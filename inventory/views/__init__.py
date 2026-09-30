@@ -461,7 +461,14 @@ def item_photo(request, pk):
     item.updated_by = request.user
     # The replaced file and its thumbnails are removed by inventory.signals.
     item.save(update_fields=["photo", "updated_by", "updated_at"])
-    messages.success(request, "Photo saved.")
+    if processed.was_reduced:
+        messages.warning(
+            request,
+            "Photo saved, but it was larger than 5 MB and had to be reduced. "
+            "Check it and replace it if the quality is not good enough.",
+        )
+    else:
+        messages.success(request, "Photo saved.")
     return redirect("inventory:item_detail", pk=pk)
 
 
