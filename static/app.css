@@ -1232,6 +1232,7 @@ form.add-inline > button {
   font-weight: 500;
 }
 .item-host-picker select { margin-bottom: 0; }
+.ost-dialog .item-host-picker + .actions-row { margin-top: 1rem; }
 .item-host-picker .stocktake-camera { margin: 0 0 0.55rem; }
 .item-host-picker .stocktake-camera video {
   max-height: min(40dvh, 16rem);

@@ -264,6 +264,23 @@ function bindSharePng() {
 
 var SCAN_FORMATS = ["qr_code", "code_128"];
 
+function cameraScanSupported() {
+  return (
+    "BarcodeDetector" in window &&
+    Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+  );
+}
+
+function cameraScanUnsupportedText() {
+  if (window.isSecureContext === false) {
+    return "The camera needs an HTTPS connection. Type the number instead, e.g. #0012.";
+  }
+  return (
+    "This browser cannot read labels with the camera (iPhone, iPad and Firefox cannot). " +
+    "Use Chrome on Android, or type the number, e.g. #0012."
+  );
+}
+
 function scanLookupUrl() {
   return document.body.getAttribute("data-scan-lookup") || "";
 }
@@ -307,10 +324,9 @@ function bindVideoScanner(opts) {
     return null;
   }
   var stage = video.closest(".stocktake-camera");
-  if (!("BarcodeDetector" in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  if (!cameraScanSupported()) {
     if (statusEl) {
-      statusEl.textContent =
-        "This browser cannot scan from the camera. Type the number below, or use Chrome or Safari.";
+      statusEl.textContent = cameraScanUnsupportedText();
     }
     startBtn.hidden = true;
     if (stage) {
@@ -656,7 +672,12 @@ function bindItemHostPickers() {
     }
 
     var scanBtn = picker.querySelector("[data-host-scan]");
-    if (scanBtn && "BarcodeDetector" in window && navigator.mediaDevices) {
+    if (scanBtn && !cameraScanSupported()) {
+      scanBtn.hidden = false;
+      scanBtn.addEventListener("click", function () {
+        sayScan(cameraScanUnsupportedText());
+      });
+    } else if (scanBtn) {
       var stopScan = bindVideoScanner({
         video: picker.querySelector("[data-host-camera] video"),
         startBtn: scanBtn,
