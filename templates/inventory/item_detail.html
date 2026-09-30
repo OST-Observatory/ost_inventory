@@ -54,6 +54,9 @@
     {% endif %}
     <a href="{% url 'inventory:item_edit' item.pk %}" role="button">Edit</a>
     <button type="button" data-dialog-open="install-in-dialog">Mount on…</button>
+    {% if item.is_active and item.quantity > 1 and not item.is_lent %}
+    <button type="button" data-dialog-open="split-dialog">Split off…</button>
+    {% endif %}
     {% if item.is_active %}
       <form method="post" action="{% url 'inventory:item_deactivate' item.pk %}" class="inline js-confirm"
             data-confirm="Deactivate this item?">
@@ -203,6 +206,28 @@
     {% include "inventory/partials/item_host_picker.html" with field=install_form.installed_in exclude_pk=item.pk %}
     <p class="actions-row">
       <button type="submit">Save</button>
+      <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
+    </p>
+  </form>
+</dialog>
+{% endif %}
+
+{% if can_write and item.is_active and item.quantity > 1 and not item.is_lent %}
+<dialog id="split-dialog" class="ost-dialog">
+  <form method="post" action="{% url 'inventory:item_split' item.pk %}">
+    {% csrf_token %}
+    <h2>Split off…</h2>
+    <p class="muted">Move some of the {{ item.quantity_display }} units to a new item with its own number, e.g. to mount, lend or store one elsewhere.</p>
+    <label>Units {{ split_form.quantity }}</label>
+    <div class="field-row">
+      <label>Room {{ split_form.room }}</label>
+      <label>Place {{ split_form.place }}</label>
+    </div>
+    <label for="{{ split_form.installed_in.id_for_label }}">Or mount on</label>
+    {% include "inventory/partials/item_host_picker.html" with field=split_form.installed_in exclude_pk=item.pk %}
+    <p class="field-hint">When mounted, the new item follows the host's location.</p>
+    <p class="actions-row">
+      <button type="submit">Split off</button>
       <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
     </p>
   </form>

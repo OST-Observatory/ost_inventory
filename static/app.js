@@ -138,9 +138,12 @@ function bindNavDrawer() {
 }
 
 function bindRoomPlaceSelects() {
-  var room = document.getElementById("id_room");
-  var place = document.getElementById("id_place");
-  if (!room || !place) {
+  document.querySelectorAll("select[data-room-select]").forEach(bindRoomPlaceSelect);
+}
+
+function bindRoomPlaceSelect(place) {
+  var room = document.getElementById(place.getAttribute("data-room-select"));
+  if (!room) {
     return;
   }
   function syncPlaces() {

@@ -1,7 +1,9 @@
 from collections import deque
+from pathlib import Path
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.core.files import File
+from django.db import models, transaction
 from django.db.models import Q
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -291,6 +293,44 @@ class Item(models.Model):
         self.last_seen_at = timezone.now()
         self.save(update_fields=["last_seen_at", "updated_at"])
 
+    @transaction.atomic
+    def split_off(self, quantity: int, user, *, location=None, installed_in=None):
+        """Move `quantity` units into a new item with its own number.
+
+        The new item copies name, description, project, categories and photo. It is
+        mounted on `installed_in` (and follows its location) or stored at `location`.
+        """
+        if not 1 <= quantity < self.quantity:
+            raise ValidationError(
+                f"Choose between 1 and {self.quantity - 1} units to split off."
+            )
+        if installed_in is None and location is None:
+            raise ValidationError("Choose a location or an item to mount on.")
+        part = type(self)(
+            name=self.name,
+            description=self.description,
+            quantity=quantity,
+            quantity_is_approximate=self.quantity_is_approximate and quantity > 1,
+            project=self.project,
+            location=installed_in.location if installed_in else location,
+            installed_in=installed_in,
+            comment=f"Split off from {self.inventory_number}.",
+            last_seen_at=timezone.now(),
+            created_by=user,
+            updated_by=user,
+        )
+        if self.photo:
+            # Own copy: deleting or replacing either item's photo removes its file.
+            with self.photo.open("rb") as src:
+                part.photo.save(Path(self.photo.name).name, File(src), save=False)
+        part.full_clean(exclude=["photo"])
+        part.save()
+        part.categories.set(self.categories.all())
+        self.quantity -= quantity
+        self.updated_by = user
+        self.save(update_fields=["quantity", "updated_by", "updated_at"])
+        return part
+
 
 class Loan(models.Model):
     item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="loans")
@@ -389,6 +429,9 @@ class StocktakeScan(models.Model):
         related_name="stocktake_found",
     )
 
+    expected_quantity = models.PositiveIntegerField(null=True, blank=True)
+    counted_quantity = models.PositiveIntegerField(null=True, blank=True)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -400,3 +443,15 @@ class StocktakeScan(models.Model):
 
     def __str__(self):
         return f"{self.item} in stocktake {self.stocktake_id}"
+
+    @property
+    def needs_count(self) -> bool:
+        return self.counted_quantity is None and (self.expected_quantity or 0) > 1
+
+    @property
+    def quantity_differs(self) -> bool:
+        return (
+            self.counted_quantity is not None
+            and self.expected_quantity is not None
+            and self.counted_quantity != self.expected_quantity
+        )

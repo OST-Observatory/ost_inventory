@@ -474,6 +474,13 @@ form.block-card > button,
   flex: 1 1 12rem;
 }
 .toolbar :is(input, button) { margin-bottom: 0; }
+.toolbar input[type="number"] {
+  width: 7rem;
+  height: auto;
+  margin: 0;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+}
 
 .item-head { margin-bottom: 0.85rem; }
 .item-head h1 { margin-bottom: 0.4rem; }

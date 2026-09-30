@@ -46,6 +46,25 @@ class RoomScopedPlaceSelect(forms.Select):
         return option
 
 
+def configure_room_place_fields(form, location=None):
+    """Set up a form's `room` and `place` selects, preselecting `location`."""
+    room = form.fields["room"]
+    place = form.fields["place"]
+    room.queryset = Location.objects.filter(parent__isnull=True).order_by("name")
+    room.label_from_instance = lambda obj: obj.name
+    place.queryset = (
+        Location.objects.exclude(parent=None).select_related("parent").order_by("parent__name", "name")
+    )
+    place.label_from_instance = lambda obj: obj.name
+    place.widget.attrs["data-room-select"] = form["room"].auto_id
+    if location and location.pk:
+        if location.parent_id:
+            room.initial = location.parent_id
+            place.initial = location.pk
+        else:
+            room.initial = location.pk
+
+
 def configure_installed_in_field(field, item=None, data=None, name="installed_in"):
     """Validate against all legal hosts; render only empty + the current choice."""
     host_qs = Item.objects.filter(is_active=True).order_by("name")
@@ -87,6 +106,58 @@ class InstalledInForm(forms.Form):
         configure_installed_in_field(
             self.fields["installed_in"], item, self.data if self.is_bound else None
         )
+
+
+class SplitItemForm(forms.Form):
+    quantity = forms.IntegerField(min_value=1, initial=1, label="Units")
+    room = forms.ModelChoiceField(
+        queryset=Location.objects.none(),
+        required=False,
+        label="Room",
+        empty_label="Select a room",
+    )
+    place = forms.ModelChoiceField(
+        queryset=Location.objects.none(),
+        required=False,
+        label="Place",
+        empty_label="Whole room",
+        widget=RoomScopedPlaceSelect,
+    )
+    installed_in = forms.ModelChoiceField(queryset=Item.objects.none(), required=False)
+
+    def __init__(self, *args, item, **kwargs):
+        kwargs.setdefault("prefix", "split")
+        super().__init__(*args, **kwargs)
+        self.item = item
+        self.fields["quantity"].widget.attrs.update(
+            {"max": max(item.quantity - 1, 1), "inputmode": "numeric"}
+        )
+        configure_room_place_fields(self, item.location)
+        configure_installed_in_field(
+            self.fields["installed_in"],
+            item,
+            self.data if self.is_bound else {},
+            name=self.add_prefix("installed_in"),
+        )
+
+    def clean_quantity(self):
+        quantity = self.cleaned_data["quantity"]
+        if quantity >= self.item.quantity:
+            raise ValidationError(
+                f"Split off at most {self.item.quantity - 1} of {self.item.quantity} units."
+            )
+        return quantity
+
+    def clean(self):
+        cleaned = super().clean()
+        room = cleaned.get("room")
+        place = cleaned.get("place")
+        if not cleaned.get("installed_in") and not room:
+            self.add_error("room", "Select a room or an item to mount on.")
+        if place and room and place.parent_id != room.pk:
+            self.add_error("place", "Place must belong to the selected room.")
+        cleaned["location"] = place or room
+        return cleaned
 
 
 class ItemForm(forms.ModelForm):
@@ -171,21 +242,7 @@ class ItemForm(forms.ModelForm):
         self.fields["quantity"].required = True
         self.fields["quantity_is_approximate"].label = "Approximate count"
         self.fields["room"].required = False
-        self.fields["room"].queryset = Location.objects.filter(parent__isnull=True).order_by(
-            "name"
-        )
-        self.fields["room"].label_from_instance = lambda obj: obj.name
-        self.fields["place"].queryset = (
-            Location.objects.exclude(parent=None).select_related("parent").order_by("parent__name", "name")
-        )
-        self.fields["place"].label_from_instance = lambda obj: obj.name
-        loc = getattr(self.instance, "location", None)
-        if loc and loc.pk:
-            if loc.parent_id:
-                self.fields["room"].initial = loc.parent_id
-                self.fields["place"].initial = loc.pk
-            else:
-                self.fields["room"].initial = loc.pk
+        configure_room_place_fields(self, getattr(self.instance, "location", None))
         if self.instance and self.instance.pk:
             if self.instance.project_id:
                 self.fields["project_name"].initial = self.instance.project.name

@@ -15,6 +15,11 @@ matching (`pg_trgm`). SQLite (development) uses case-insensitive contains.
 optional project and container, quantity (exact or approximate), description,
 comment, photo. **Mounted on** links an item to a host (e.g. a camera on a
 telescope); the mounted item then follows the host’s location.
+- **Several units** — track interchangeable things (cables, adapters, screws)
+as one item per location with a quantity; give anything that is lent, mounted,
+or has a serial number its own item. **Split off…** on the item page moves some
+units into a new item with its own number, stored elsewhere or mounted on a
+host (e.g. to mount or lend one cable out of five).
 - **Photos** — upload on create/edit, or **Take photo** / **Replace photo** on
 the item page (rear camera on a phone). JPEG, PNG, and WebP; max 5 MB; images
 are re-encoded and stored under UUID names.
@@ -30,7 +35,9 @@ printer’s own app, or send labels straight to a Supvan/Katasymbol T50 printer
 over IPP (see **Label printer** below). On **Search**, **Scan label** opens the
 camera (Chrome/Safari) or a number field and jumps to the matching item or location.
 - **Stocktake** — a dated physical count (separate from **Still here** / not
-seen recently).
+seen recently). Items with several units ask for a count after the scan
+(**All 5 here**, or the number seen; approximate items take a new estimate).
+**Quantity differs** in the report lists mismatches with **Update quantity**.
 - **CSV** — import (preview, then commit) and export. Matching on import is
 active item + name + location.
 - **Access control** — capabilities on Django groups, editable in the app

@@ -18,7 +18,14 @@ from accounts.permissions import (
     user_can_write,
     write_required,
 )
-from inventory.forms import InstalledInForm, ItemForm, LoanForm, PlaceForm, RoomForm
+from inventory.forms import (
+    InstalledInForm,
+    ItemForm,
+    LoanForm,
+    PlaceForm,
+    RoomForm,
+    SplitItemForm,
+)
 from inventory.images import process_item_photo
 from inventory.labels import (
     LABEL_CODE_SESSION_KEY,
@@ -129,9 +136,10 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
                 self.object = self.get_object()
                 record_item_scan(stocktake, self.object, request.user)
                 set_active_stocktake(request, stocktake)
+                note = " Count the units below." if self.object.quantity > 1 else ""
                 messages.success(
                     request,
-                    f"Recorded {self.object.inventory_number} {self.object.name}.",
+                    f"Recorded {self.object.inventory_number} {self.object.name}.{note}",
                 )
                 return redirect("inventory:stocktake_detail", pk=stocktake.pk)
         return super().get(request, *args, **kwargs)
@@ -149,6 +157,7 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
             get_label_size(ctx["selected_size"]),
         )
         ctx["install_form"] = InstalledInForm(item=self.object)
+        ctx["split_form"] = SplitItemForm(item=self.object)
         return ctx
 
 
@@ -295,6 +304,37 @@ def item_install(request, pk):
     else:
         messages.success(request, "No longer mounted on another item.")
     return redirect("inventory:item_detail", pk=pk)
+
+
+@write_required
+def item_split(request, pk):
+    item = get_object_or_404(Item, pk=pk, is_active=True)
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required")
+    if item.is_lent:
+        messages.error(request, "Return the loan before splitting off units.")
+        return redirect("inventory:item_detail", pk=pk)
+    form = SplitItemForm(request.POST, item=item)
+    if not form.is_valid():
+        errors = [err for errs in form.errors.values() for err in errs]
+        messages.error(request, errors[0] if errors else "Could not split off units.")
+        return redirect("inventory:item_detail", pk=pk)
+    try:
+        part = item.split_off(
+            form.cleaned_data["quantity"],
+            request.user,
+            location=form.cleaned_data["location"],
+            installed_in=form.cleaned_data.get("installed_in"),
+        )
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0])
+        return redirect("inventory:item_detail", pk=pk)
+    messages.success(
+        request,
+        f"Split off {part.quantity} × from {item.inventory_number} as "
+        f"{part.inventory_number}. Print a label for the new item.",
+    )
+    return redirect("inventory:item_detail", pk=part.pk)
 
 
 @write_required

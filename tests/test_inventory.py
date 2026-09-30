@@ -955,3 +955,242 @@ class InstalledInTests(TestCase):
         self.client.login(username="reader", password="x")
         resp = self.client.get(reverse("inventory:item_host_lookup"), {"q": "Tele"})
         self.assertEqual(resp.status_code, 403)
+
+
+class SplitOffTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="writer", password="x", is_supervisor=True
+        )
+        self.lab = Location.objects.create(name="Lab")
+        self.shelf = Location.objects.create(name="Shelf 2", parent=self.lab)
+        self.dome = Location.objects.create(name="Dome")
+        self.cables = Item.objects.create(
+            name="BNC cable",
+            description="1 m, 50 ohm",
+            quantity=5,
+            container="Crate 4",
+            location=self.shelf,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.cables.categories.add(Category.objects.create(name="Cables"))
+        self.scope = Item.objects.create(
+            name="Telescope",
+            location=self.dome,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client = Client()
+        self.client.login(username="writer", password="x")
+
+    def test_detail_offers_split_only_for_several_units(self):
+        detail = self.client.get(reverse("inventory:item_detail", args=[self.cables.pk]))
+        self.assertContains(detail, "Split off…")
+        self.assertContains(detail, 'id="id_split-installed_in"')
+        self.assertContains(detail, 'data-room-select="id_split-room"')
+        single = self.client.get(reverse("inventory:item_detail", args=[self.scope.pk]))
+        self.assertNotContains(single, "Split off…")
+
+    def test_split_to_location(self):
+        resp = self.client.post(
+            reverse("inventory:item_split", args=[self.cables.pk]),
+            {"split-quantity": 2, "split-room": self.dome.pk, "split-place": ""},
+        )
+        part = Item.objects.exclude(pk__in=[self.cables.pk, self.scope.pk]).get()
+        self.assertRedirects(resp, reverse("inventory:item_detail", args=[part.pk]))
+        self.cables.refresh_from_db()
+        self.assertEqual(self.cables.quantity, 3)
+        self.assertEqual(part.quantity, 2)
+        self.assertEqual(part.name, "BNC cable")
+        self.assertEqual(part.description, "1 m, 50 ohm")
+        self.assertEqual(part.location_id, self.dome.pk)
+        self.assertEqual(part.container, "")
+        self.assertIn(self.cables.inventory_number, part.comment)
+        self.assertEqual([c.name for c in part.categories.all()], ["Cables"])
+
+    def test_split_and_mount_one_unit(self):
+        resp = self.client.post(
+            reverse("inventory:item_split", args=[self.cables.pk]),
+            {"split-quantity": 1, "split-installed_in": self.scope.pk},
+        )
+        self.assertEqual(resp.status_code, 302)
+        part = Item.objects.get(installed_in=self.scope)
+        self.assertEqual(part.quantity, 1)
+        self.assertEqual(part.location_id, self.dome.pk)
+        self.cables.refresh_from_db()
+        self.assertEqual(self.cables.quantity, 4)
+
+    def test_split_rejects_all_units_and_missing_target(self):
+        for data in (
+            {"split-quantity": 5, "split-room": self.dome.pk},
+            {"split-quantity": 1},
+        ):
+            resp = self.client.post(
+                reverse("inventory:item_split", args=[self.cables.pk]), data
+            )
+            self.assertRedirects(
+                resp, reverse("inventory:item_detail", args=[self.cables.pk])
+            )
+        self.cables.refresh_from_db()
+        self.assertEqual(self.cables.quantity, 5)
+        self.assertEqual(Item.objects.count(), 2)
+
+    def test_split_blocked_while_on_loan(self):
+        from datetime import date
+
+        Loan.objects.create(
+            item=self.cables,
+            borrower_name="Ada",
+            due_date=date(2030, 1, 1),
+            recorded_by=self.user,
+        )
+        self.client.post(
+            reverse("inventory:item_split", args=[self.cables.pk]),
+            {"split-quantity": 1, "split-room": self.dome.pk},
+        )
+        self.cables.refresh_from_db()
+        self.assertEqual(self.cables.quantity, 5)
+
+    def test_split_copies_photo_into_own_file(self):
+        from tempfile import TemporaryDirectory
+
+        from django.core.files.base import ContentFile
+        from django.test import override_settings
+
+        buf = BytesIO()
+        Image.new("RGB", (12, 12), "blue").save(buf, format="JPEG")
+        with TemporaryDirectory() as tmp, override_settings(MEDIA_ROOT=tmp):
+            self.cables.photo.save("cable.jpg", ContentFile(buf.getvalue()))
+            part = self.cables.split_off(1, self.user, location=self.dome)
+            self.assertTrue(part.photo)
+            self.assertNotEqual(part.photo.name, self.cables.photo.name)
+            self.assertTrue(part.photo.storage.exists(part.photo.name))
+
+
+class StocktakeCountTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="writer", password="x", is_supervisor=True
+        )
+        self.room = Location.objects.create(name="Lab")
+        self.cables = Item.objects.create(
+            name="BNC cable",
+            quantity=5,
+            location=self.room,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.screws = Item.objects.create(
+            name="M4 screws",
+            quantity=100,
+            quantity_is_approximate=True,
+            location=self.room,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.eyepiece = Item.objects.create(
+            name="Eyepiece",
+            location=self.room,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client = Client()
+        self.client.login(username="writer", password="x")
+        resp = self.client.post(
+            reverse("inventory:stocktake"), {"scope_location": str(self.room.pk)}
+        )
+        self.stocktake_pk = int(resp["Location"].rstrip("/").split("/")[-1])
+        self.client.get(reverse("location_short", args=[self.room.pk]))
+
+    def _scan(self, item):
+        self.client.get(reverse("item_short", args=[item.pk]))
+        return StocktakeScan.objects.get(stocktake_id=self.stocktake_pk, item=item)
+
+    def _detail(self):
+        return self.client.get(
+            reverse("inventory:stocktake_detail", args=[self.stocktake_pk])
+        )
+
+    def test_scan_of_multi_unit_item_asks_for_count(self):
+        scan = self._scan(self.cables)
+        self.assertEqual(scan.expected_quantity, 5)
+        self.assertIsNone(scan.counted_quantity)
+        single = self._scan(self.eyepiece)
+        self.assertFalse(single.needs_count)
+        detail = self._detail()
+        self.assertContains(detail, "Count the units below.")
+        self.assertContains(detail, "All 5 here")
+        self.assertContains(
+            detail, reverse("inventory:stocktake_count", args=[self.stocktake_pk, scan.pk])
+        )
+        self.assertNotContains(
+            detail, reverse("inventory:stocktake_count", args=[self.stocktake_pk, single.pk])
+        )
+
+    def test_confirm_all_units(self):
+        scan = self._scan(self.cables)
+        self.client.post(
+            reverse("inventory:stocktake_count", args=[self.stocktake_pk, scan.pk]),
+            {"all": "1"},
+        )
+        scan.refresh_from_db()
+        self.assertEqual(scan.counted_quantity, 5)
+        detail = self._detail()
+        self.assertNotContains(detail, "All 5 here")
+        self.assertNotContains(detail, "Quantity differs")
+
+    def test_counted_difference_can_be_applied(self):
+        scan = self._scan(self.cables)
+        self.client.post(
+            reverse("inventory:stocktake_count", args=[self.stocktake_pk, scan.pk]),
+            {"counted": "3"},
+        )
+        detail = self._detail()
+        self.assertContains(detail, "Quantity differs")
+        self.assertContains(detail, "Update quantity")
+        self.cables.refresh_from_db()
+        self.assertEqual(self.cables.quantity, 5)
+        self.client.post(
+            reverse("inventory:stocktake_apply_count", args=[self.stocktake_pk, scan.pk])
+        )
+        self.cables.refresh_from_db()
+        self.assertEqual(self.cables.quantity, 3)
+        self.assertNotContains(self._detail(), "Quantity differs")
+
+    def test_approximate_items_offer_estimate(self):
+        scan = self._scan(self.screws)
+        detail = self._detail()
+        self.assertContains(detail, "Looks right")
+        self.assertContains(detail, "New estimate for")
+        self.client.post(
+            reverse("inventory:stocktake_count", args=[self.stocktake_pk, scan.pk]),
+            {"counted": "80"},
+        )
+        self.client.post(
+            reverse("inventory:stocktake_apply_count", args=[self.stocktake_pk, scan.pk])
+        )
+        self.screws.refresh_from_db()
+        self.assertEqual(self.screws.quantity, 80)
+        self.assertTrue(self.screws.quantity_is_approximate)
+
+    def test_zero_count_is_not_applied(self):
+        scan = self._scan(self.cables)
+        self.client.post(
+            reverse("inventory:stocktake_count", args=[self.stocktake_pk, scan.pk]),
+            {"counted": "0"},
+        )
+        self.client.post(
+            reverse("inventory:stocktake_apply_count", args=[self.stocktake_pk, scan.pk])
+        )
+        self.cables.refresh_from_db()
+        self.assertEqual(self.cables.quantity, 5)
+
+    def test_invalid_count_is_rejected(self):
+        scan = self._scan(self.cables)
+        self.client.post(
+            reverse("inventory:stocktake_count", args=[self.stocktake_pk, scan.pk]),
+            {"counted": "-2"},
+        )
+        scan.refresh_from_db()
+        self.assertIsNone(scan.counted_quantity)

@@ -16,6 +16,7 @@ from inventory.views import (
     item_install,
     item_photo,
     item_reactivate,
+    item_split,
     loan_create,
     loan_return,
     location_add_place,
@@ -35,6 +36,8 @@ from inventory.views.extras import (
     scan_lookup,
 )
 from inventory.views.stocktake import (
+    stocktake_apply_count,
+    stocktake_count,
     stocktake_detail,
     stocktake_finish,
     stocktake_index,
@@ -50,6 +53,7 @@ urlpatterns = [
     path("items/<int:pk>/", ItemDetailView.as_view(), name="item_detail"),
     path("items/<int:pk>/edit/", ItemUpdateView.as_view(), name="item_edit"),
     path("items/<int:pk>/install/", item_install, name="item_install"),
+    path("items/<int:pk>/split/", item_split, name="item_split"),
     path("items/<int:pk>/deactivate/", item_deactivate, name="item_deactivate"),
     path("items/<int:pk>/reactivate/", item_reactivate, name="item_reactivate"),
     path("items/<int:pk>/delete/", item_delete, name="item_delete"),
@@ -67,6 +71,16 @@ urlpatterns = [
         "stocktake/<int:pk>/scans/<int:scan_id>/move/",
         stocktake_move_here,
         name="stocktake_move_here",
+    ),
+    path(
+        "stocktake/<int:pk>/scans/<int:scan_id>/count/",
+        stocktake_count,
+        name="stocktake_count",
+    ),
+    path(
+        "stocktake/<int:pk>/scans/<int:scan_id>/apply-count/",
+        stocktake_apply_count,
+        name="stocktake_apply_count",
     ),
     path("locations/", LocationListView.as_view(), name="locations"),
     path("locations/add-room/", location_add_room, name="location_add_room"),

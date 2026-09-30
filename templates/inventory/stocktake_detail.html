@@ -28,6 +28,34 @@
   </form>
 </section>
 
+{% if report.to_count %}
+<section class="block-card">
+  <h2>Count</h2>
+  <p class="muted">These items have several units. Confirm them all, or enter the number you see.</p>
+  {% for scan in report.to_count %}
+  <div class="toolbar">
+    <span>
+      <span class="inv-badge">{{ scan.item.inventory_number }}</span>
+      {{ scan.item.name }}
+      <span class="muted">· expected {% if scan.item.quantity_is_approximate %}~{% endif %}{{ scan.expected_quantity }}</span>
+    </span>
+    <form method="post" action="{% url 'inventory:stocktake_count' stocktake.pk scan.pk %}" class="inline">
+      {% csrf_token %}
+      <input type="hidden" name="all" value="1">
+      <button type="submit">{% if scan.item.quantity_is_approximate %}Looks right{% else %}All {{ scan.expected_quantity }} here{% endif %}</button>
+    </form>
+    <form method="post" action="{% url 'inventory:stocktake_count' stocktake.pk scan.pk %}" class="inline">
+      {% csrf_token %}
+      <input type="number" name="counted" min="0" inputmode="numeric" required
+             placeholder="{% if scan.item.quantity_is_approximate %}Estimate{% else %}Counted{% endif %}"
+             aria-label="{% if scan.item.quantity_is_approximate %}New estimate for{% else %}Units counted of{% endif %} {{ scan.item.inventory_number }}">
+      <button type="submit" class="outline secondary">Save</button>
+    </form>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
 {% if here_items %}
 <section class="block-card">
   <h2>Expected here</h2>
@@ -37,7 +65,7 @@
       {% for row in here_items %}
       <tr>
         <td><span class="inv-badge">{{ row.item.inventory_number }}</span></td>
-        <td>{{ row.item.name }}</td>
+        <td>{{ row.item.name }}{% if row.item.quantity > 1 %} <span class="muted">×&nbsp;{{ row.item.quantity_display }}</span>{% endif %}</td>
         <td>{% if row.scanned %}Scanned{% else %}<span class="muted">Waiting</span>{% endif %}</td>
       </tr>
       {% endfor %}
@@ -93,6 +121,31 @@
   <p class="muted">None.</p>
   {% endif %}
 </section>
+
+{% if report.quantity_differs %}
+<section class="block-card">
+  <h2>Quantity differs</h2>
+  <table>
+    <thead><tr><th>#</th><th>Name</th><th>Expected</th><th>Counted</th><th></th></tr></thead>
+    <tbody>
+      {% for scan in report.quantity_differs %}
+      <tr>
+        <td><a href="{% url 'inventory:item_detail' scan.item_id %}"><span class="inv-badge">{{ scan.item.inventory_number }}</span></a></td>
+        <td>{{ scan.item.name }}</td>
+        <td>{% if scan.item.quantity_is_approximate %}~{% endif %}{{ scan.expected_quantity }}</td>
+        <td>{% if scan.item.quantity_is_approximate %}~{% endif %}{{ scan.counted_quantity }}</td>
+        <td class="col-actions">
+          <form method="post" action="{% url 'inventory:stocktake_apply_count' stocktake.pk scan.pk %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="outline secondary">Update quantity</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
 
 {% if report.found_unlocated %}
 <section class="block-card">

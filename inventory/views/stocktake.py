@@ -110,3 +110,51 @@ def stocktake_move_here(request, pk, scan_id):
         f"{item.inventory_number} moved to {scan.found_location.path_display()}.",
     )
     return redirect("inventory:stocktake_detail", pk=stocktake.pk)
+
+
+@write_required
+@require_POST
+def stocktake_count(request, pk, scan_id):
+    stocktake = get_object_or_404(
+        Stocktake, pk=pk, started_by=request.user, finished_at__isnull=True
+    )
+    scan = get_object_or_404(stocktake.scans.select_related("item"), pk=scan_id)
+    if request.POST.get("all"):
+        counted = scan.expected_quantity
+    else:
+        raw = (request.POST.get("counted") or "").strip()
+        counted = int(raw) if raw.isdigit() else None
+    if counted is None:
+        messages.error(request, "Enter the number of units you counted.")
+        return redirect("inventory:stocktake_detail", pk=stocktake.pk)
+    scan.counted_quantity = counted
+    scan.save(update_fields=["counted_quantity"])
+    messages.success(
+        request, f"Counted {counted} × {scan.item.inventory_number} {scan.item.name}."
+    )
+    return redirect("inventory:stocktake_detail", pk=stocktake.pk)
+
+
+@write_required
+@require_POST
+def stocktake_apply_count(request, pk, scan_id):
+    stocktake = get_object_or_404(Stocktake, pk=pk, started_by=request.user)
+    scan = get_object_or_404(stocktake.scans.select_related("item"), pk=scan_id)
+    if not scan.quantity_differs:
+        return redirect("inventory:stocktake_detail", pk=stocktake.pk)
+    item = scan.item
+    if scan.counted_quantity == 0:
+        messages.error(
+            request,
+            f"Counted 0 × {item.inventory_number}. Deactivate the item if it is gone.",
+        )
+        return redirect("inventory:stocktake_detail", pk=stocktake.pk)
+    item.quantity = scan.counted_quantity
+    item.updated_by = request.user
+    item.save(update_fields=["quantity", "updated_by", "updated_at"])
+    scan.expected_quantity = scan.counted_quantity
+    scan.save(update_fields=["expected_quantity"])
+    messages.success(
+        request, f"{item.inventory_number} quantity set to {item.quantity_display}."
+    )
+    return redirect("inventory:stocktake_detail", pk=stocktake.pk)

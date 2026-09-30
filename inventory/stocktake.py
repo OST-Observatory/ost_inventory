@@ -77,6 +77,7 @@ def record_item_scan(stocktake: Stocktake, item: Item, user) -> StocktakeScan:
             "scanned_at": now,
             "scanned_by": user,
             "expected_location": item.location,
+            "expected_quantity": item.quantity,
             "found_location": stocktake.current_location,
         },
     )
@@ -110,7 +111,14 @@ def classify_scans(stocktake: Stocktake) -> dict:
             found_here.append(scan)
         else:
             found_elsewhere.append(scan)
+    to_count = sorted(
+        (scan for scan in scans if scan.needs_count),
+        key=lambda scan: scan.scanned_at,
+        reverse=True,
+    )
     return {
+        "to_count": to_count,
+        "quantity_differs": [scan for scan in scans if scan.quantity_differs],
         "found_here": found_here,
         "found_elsewhere": found_elsewhere,
         "found_unlocated": found_unlocated,
