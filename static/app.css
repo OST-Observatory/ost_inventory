@@ -693,6 +693,23 @@ td:has(.inline),
 dl { display: grid; grid-template-columns: 8rem 1fr; gap: 0.4rem 1rem; }
 dt { font-weight: 600; opacity: 0.8; }
 dd { margin: 0; }
+/* Text-style button for a small action inside running text, e.g. in a <dd>. */
+button.inline-action,
+button.inline-action:is(:hover, :active, :focus) {
+  display: inline;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--pico-primary);
+  background: none;
+  border: 0;
+  box-shadow: none;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+button.inline-action:hover { color: var(--pico-primary-hover); }
 .pagination { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; }
 
 .login-shell {

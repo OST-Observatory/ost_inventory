@@ -121,11 +121,13 @@
             {% if other.installed_in %}mounted on {{ other.installed_in.inventory_number }} {{ other.installed_in.name }}{% else %}{{ other.location.path_display }}{% endif %}
           </div>
           {% endfor %}
-          {% if same_type_items %}<div class="muted">{% if same_type_approx %}About {% endif %}{{ same_type_total }} units in total</div>{% endif %}
-          {% if not same_type_items %}—{% endif %}
-          {% if can_write and item.is_active %}
-          <button type="button" class="outline secondary still-here-mini" data-dialog-open="same-type-dialog">{% if same_type_items %}Edit…{% else %}Link…{% endif %}</button>
-          {% endif %}
+          <div>
+            {% if same_type_items %}<span class="muted">{% if same_type_approx %}About {% endif %}{{ same_type_total }} units in total</span>{% else %}—{% endif %}
+            {% if can_write and item.is_active %}
+            <span class="muted">·</span>
+            <button type="button" class="inline-action" data-dialog-open="same-type-dialog">{% if same_type_items %}Edit…{% else %}Link…{% endif %}</button>
+            {% endif %}
+          </div>
         </dd>
         <dt>Categories</dt>
         <dd>{% for c in item.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
