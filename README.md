@@ -38,7 +38,10 @@ Overdue reminders can be sent daily.
 `L12` for a location). Compact tapes default to barcode. Print from the label
 printer’s own app, or send labels straight to a Supvan/Katasymbol T50 printer
 over IPP (see **Label printer** below). On **Search**, **Scan label** opens the
-camera (Chrome/Safari) or a number field and jumps to the matching item or location.
+camera (Chrome on Android; iOS browsers cannot read codes) or a number field and
+jumps to the matching item or location. While the camera runs, **1× / 2× / 3×**
+zoom and **Camera n/m** (switch between rear cameras) help phones whose default
+camera cannot focus close up; the browser remembers both choices.
 - **Stocktake** — a dated physical count (separate from **Still here** / not
 seen recently). Items with several units ask for a count after the scan
 (**All 5 here**, or the number seen; approximate items take a new estimate).

@@ -281,6 +281,58 @@ function cameraScanUnsupportedText() {
   );
 }
 
+var SCAN_CAMERA_KEY = "ost-scan-camera";
+var SCAN_ZOOM_KEY = "ost-scan-zoom";
+var SCAN_ZOOM_LEVELS = [1, 2, 3];
+var SCAN_DEFAULT_ZOOM = 2;
+
+// Per-browser scanner preferences; storage can be unavailable (private mode).
+function loadScanPref(key) {
+  try {
+    return window.localStorage.getItem(key) || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function saveScanPref(key, value) {
+  try {
+    if (value) {
+      window.localStorage.setItem(key, value);
+    } else {
+      window.localStorage.removeItem(key);
+    }
+  } catch (e) {
+    // Preference is only a convenience.
+  }
+}
+
+function scanVideoConstraints() {
+  // A high resolution keeps small labels readable; the saved camera wins over
+  // "any rear camera", which on multi-camera phones is often the wide-angle one.
+  var constraints = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+  var deviceId = loadScanPref(SCAN_CAMERA_KEY);
+  if (deviceId) {
+    constraints.deviceId = { exact: deviceId };
+  } else {
+    constraints.facingMode = { ideal: "environment" };
+  }
+  return constraints;
+}
+
+function openScanStream() {
+  return navigator.mediaDevices
+    .getUserMedia({ video: scanVideoConstraints(), audio: false })
+    .catch(function (err) {
+      if (!loadScanPref(SCAN_CAMERA_KEY)) {
+        throw err;
+      }
+      // The saved camera is gone; forget it and fall back to any rear camera.
+      saveScanPref(SCAN_CAMERA_KEY, "");
+      return openScanStream();
+    });
+}
+
 function scanLookupUrl() {
   return document.body.getAttribute("data-scan-lookup") || "";
 }
@@ -340,6 +392,111 @@ function bindVideoScanner(opts) {
   var going = false;
   var lastTried = "";
   var inflight = false;
+  var controls = null;
+
+  function cameraButton(text, onClick) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = text;
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  function applyZoom(track, zoom, buttons) {
+    track.applyConstraints({ advanced: [{ zoom: zoom }] }).catch(function () {});
+    buttons.forEach(function (btn) {
+      btn.setAttribute("aria-pressed", btn._zoom === zoom ? "true" : "false");
+    });
+  }
+
+  function setupTrack(track) {
+    if (controls) {
+      controls.remove();
+      controls = null;
+    }
+    if (!track || !stage) {
+      return;
+    }
+    var caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.focusMode && caps.focusMode.indexOf("continuous") !== -1) {
+      track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(function () {});
+    }
+    controls = document.createElement("div");
+    controls.className = "camera-controls";
+    var zoomButtons = [];
+    if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+      var levels = SCAN_ZOOM_LEVELS.filter(function (z) {
+        return z >= caps.zoom.min && z <= caps.zoom.max;
+      });
+      var saved = parseFloat(loadScanPref(SCAN_ZOOM_KEY));
+      var initial = levels.indexOf(saved) !== -1 ? saved : SCAN_DEFAULT_ZOOM;
+      if (levels.length > 1) {
+        levels.forEach(function (z) {
+          var btn = cameraButton(z + "×", function () {
+            saveScanPref(SCAN_ZOOM_KEY, String(z));
+            applyZoom(track, z, zoomButtons);
+          });
+          btn._zoom = z;
+          btn.setAttribute("aria-label", "Zoom " + z + "×");
+          zoomButtons.push(btn);
+          controls.appendChild(btn);
+        });
+        if (levels.indexOf(initial) === -1) {
+          initial = levels[levels.length - 1];
+        }
+        applyZoom(track, initial, zoomButtons);
+      }
+    }
+    var currentId = (track.getSettings && track.getSettings().deviceId) || "";
+    navigator.mediaDevices
+      .enumerateDevices()
+      .then(function (devices) {
+        var cams = devices.filter(function (d) {
+          return d.kind === "videoinput" && d.deviceId;
+        });
+        var rear = cams.filter(function (d) {
+          return /back|rear|environment/i.test(d.label);
+        });
+        if (rear.length > 1) {
+          cams = rear;
+        }
+        if (cams.length < 2 || !controls) {
+          return;
+        }
+        var index = Math.max(
+          0,
+          cams.findIndex(function (d) {
+            return d.deviceId === currentId;
+          })
+        );
+        var btn = cameraButton("Camera " + (index + 1) + "/" + cams.length, function () {
+          var next = cams[(index + 1) % cams.length];
+          saveScanPref(SCAN_CAMERA_KEY, next.deviceId);
+          switchCamera();
+        });
+        btn.setAttribute("aria-label", "Switch camera");
+        controls.appendChild(btn);
+      })
+      .catch(function () {});
+    stage.appendChild(controls);
+  }
+
+  function attach(media) {
+    stream = media;
+    video.srcObject = media;
+    setLive(true);
+    setupTrack(media.getVideoTracks()[0]);
+  }
+
+  function switchCamera() {
+    if (stream) {
+      stream.getTracks().forEach(function (track) {
+        track.stop();
+      });
+      stream = null;
+    }
+    openScanStream().then(attach).catch(stop);
+  }
 
   function setLive(on) {
     if (stage) {
@@ -462,12 +619,9 @@ function bindVideoScanner(opts) {
       return;
     }
     withDetector(function () {});
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" }, audio: false })
+    openScanStream()
       .then(function (media) {
-        stream = media;
-        video.srcObject = media;
-        setLive(true);
+        attach(media);
         startBtn.hidden = true;
         if (stopBtn) {
           stopBtn.hidden = false;
