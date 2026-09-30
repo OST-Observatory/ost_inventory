@@ -22,8 +22,10 @@ from inventory.forms import (
     InstalledInForm,
     ItemForm,
     LoanForm,
+    MergeItemForm,
     PlaceForm,
     RoomForm,
+    SameTypeForm,
     SplitItemForm,
 )
 from inventory.images import process_item_photo
@@ -158,6 +160,21 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
         )
         ctx["install_form"] = InstalledInForm(item=self.object)
         ctx["split_form"] = SplitItemForm(item=self.object)
+        ctx["same_type_form"] = SameTypeForm(item=self.object)
+        ctx["merge_form"] = MergeItemForm(item=self.object)
+        same_type = list(
+            self.object.same_type_items().select_related(
+                "location", "location__parent", "installed_in"
+            )
+        )
+        ctx["same_type_items"] = same_type
+        ctx["same_type_total"] = self.object.quantity + sum(i.quantity for i in same_type)
+        ctx["same_type_approx"] = any(
+            i.quantity_is_approximate for i in [self.object, *same_type]
+        )
+        ctx["can_merge"] = (
+            not self.object.is_lent and ctx["merge_form"].fields["into"].queryset.exists()
+        )
         return ctx
 
 
@@ -335,6 +352,48 @@ def item_split(request, pk):
         f"{part.inventory_number}. Print a label for the new item.",
     )
     return redirect("inventory:item_detail", pk=part.pk)
+
+
+@write_required
+def item_same_type(request, pk):
+    item = get_object_or_404(Item, pk=pk, is_active=True)
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required")
+    if request.POST.get("remove"):
+        item.unlink_same_type()
+        messages.info(request, "Removed from the group of same-type items.")
+        return redirect("inventory:item_detail", pk=pk)
+    form = SameTypeForm(request.POST, item=item)
+    if not form.is_valid():
+        messages.error(request, "Choose an active item of the same type.")
+        return redirect("inventory:item_detail", pk=pk)
+    other = form.cleaned_data["same_as"]
+    item.link_same_type(other)
+    messages.success(request, f"Grouped with {other.inventory_number} {other.name}.")
+    return redirect("inventory:item_detail", pk=pk)
+
+
+@write_required
+def item_merge(request, pk):
+    item = get_object_or_404(Item, pk=pk, is_active=True)
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required")
+    form = MergeItemForm(request.POST, item=item)
+    if not form.is_valid():
+        messages.error(request, "Choose an available item of the same type.")
+        return redirect("inventory:item_detail", pk=pk)
+    target = form.cleaned_data["into"]
+    try:
+        item.merge_into(target, request.user)
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0])
+        return redirect("inventory:item_detail", pk=pk)
+    messages.success(
+        request,
+        f"Merged {item.inventory_number} into {target.inventory_number}, now "
+        f"{target.quantity_display} units. {item.inventory_number} is deactivated.",
+    )
+    return redirect("inventory:item_detail", pk=target.pk)
 
 
 @write_required

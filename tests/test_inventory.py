@@ -3,6 +3,7 @@ from io import BytesIO
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -1020,6 +1021,11 @@ class SplitOffTests(TestCase):
         self.assertEqual(part.location_id, self.dome.pk)
         self.cables.refresh_from_db()
         self.assertEqual(self.cables.quantity, 4)
+        self.assertIsNotNone(self.cables.unit_group)
+        self.assertEqual(part.unit_group, self.cables.unit_group)
+        detail = self.client.get(reverse("inventory:item_detail", args=[self.cables.pk]))
+        self.assertContains(detail, part.inventory_number)
+        self.assertContains(detail, "5 units in total")
 
     def test_split_rejects_all_units_and_missing_target(self):
         for data in (
@@ -1194,3 +1200,131 @@ class StocktakeCountTests(TestCase):
         )
         scan.refresh_from_db()
         self.assertIsNone(scan.counted_quantity)
+
+
+class SameTypeTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="writer", password="x", is_supervisor=True
+        )
+        self.lab = Location.objects.create(name="Lab")
+        self.dome = Location.objects.create(name="Dome")
+
+        def make(name, quantity=1, location=None, **extra):
+            return Item.objects.create(
+                name=name,
+                quantity=quantity,
+                location=location or self.lab,
+                created_by=self.user,
+                updated_by=self.user,
+                **extra,
+            )
+
+        self.make = make
+        self.stock = make("BNC cable", 4)
+        self.scope = make("Telescope", location=self.dome)
+        self.client = Client()
+        self.client.login(username="writer", password="x")
+
+    def _link(self, item, other):
+        return self.client.post(
+            reverse("inventory:item_same_type", args=[item.pk]),
+            {"type-same_as": other.pk},
+        )
+
+    def test_link_existing_items_and_show_units(self):
+        other = self.make("BNC cable", 2, location=self.dome)
+        resp = self._link(other, self.stock)
+        self.assertRedirects(resp, reverse("inventory:item_detail", args=[other.pk]))
+        self.stock.refresh_from_db()
+        other.refresh_from_db()
+        self.assertIsNotNone(self.stock.unit_group)
+        self.assertEqual(self.stock.unit_group, other.unit_group)
+        detail = self.client.get(reverse("inventory:item_detail", args=[self.stock.pk]))
+        self.assertContains(detail, other.inventory_number)
+        self.assertContains(detail, "Dome")
+        self.assertContains(detail, "6 units in total")
+        self.assertContains(detail, "Merge back…")
+
+    def test_linking_joins_whole_groups(self):
+        a, b = self.make("Adapter"), self.make("Adapter")
+        c, d = self.make("Adapter"), self.make("Adapter")
+        a.link_same_type(b)
+        c.link_same_type(d)
+        self._link(b, c)
+        groups = set(Item.objects.filter(pk__in=[a.pk, b.pk, c.pk, d.pk]).values_list("unit_group", flat=True))
+        self.assertEqual(len(groups), 1)
+        self.assertIsNotNone(groups.pop())
+
+    def test_cannot_link_to_itself(self):
+        self._link(self.stock, self.stock)
+        self.stock.refresh_from_db()
+        self.assertIsNone(self.stock.unit_group)
+
+    def test_remove_from_group_dissolves_pair(self):
+        other = self.make("BNC cable", 2)
+        self.stock.link_same_type(other)
+        self.client.post(
+            reverse("inventory:item_same_type", args=[other.pk]), {"remove": "1"}
+        )
+        self.stock.refresh_from_db()
+        other.refresh_from_db()
+        self.assertIsNone(other.unit_group)
+        self.assertIsNone(self.stock.unit_group)
+
+    def test_merge_mounted_unit_back_into_stock(self):
+        part = self.stock.split_off(1, self.user, installed_in=self.scope)
+        detail = self.client.get(reverse("inventory:item_detail", args=[part.pk]))
+        self.assertContains(detail, "Merge back…")
+        self.assertContains(detail, f"{self.stock.inventory_number} · 3× · Lab")
+        resp = self.client.post(
+            reverse("inventory:item_merge", args=[part.pk]), {"merge-into": self.stock.pk}
+        )
+        self.assertRedirects(resp, reverse("inventory:item_detail", args=[self.stock.pk]))
+        self.stock.refresh_from_db()
+        part.refresh_from_db()
+        self.assertEqual(self.stock.quantity, 4)
+        self.assertFalse(part.is_active)
+        self.assertIsNone(part.installed_in_id)
+        self.assertIn(f"Merged into {self.stock.inventory_number}.", part.comment)
+        detail = self.client.get(reverse("inventory:item_detail", args=[self.stock.pk]))
+        self.assertNotContains(detail, "Merge back…")
+        self.assertNotContains(detail, "units in total")
+
+    def test_merge_refused_outside_group_or_while_lent(self):
+        from datetime import date
+
+        stranger = self.make("BNC cable", 2)
+        resp = self.client.post(
+            reverse("inventory:item_merge", args=[stranger.pk]), {"merge-into": self.stock.pk}
+        )
+        self.assertRedirects(resp, reverse("inventory:item_detail", args=[stranger.pk]))
+        part = self.stock.split_off(1, self.user, location=self.dome)
+        Loan.objects.create(
+            item=part, borrower_name="Ada", due_date=date(2030, 1, 1), recorded_by=self.user
+        )
+        self.client.post(
+            reverse("inventory:item_merge", args=[part.pk]), {"merge-into": self.stock.pk}
+        )
+        for item in (stranger, part):
+            item.refresh_from_db()
+            self.assertTrue(item.is_active)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity, 3)
+
+    def test_merge_refused_while_parts_are_mounted_on_it(self):
+        part = self.stock.split_off(1, self.user, location=self.dome)
+        self.make("Clip", installed_in=part)
+        with self.assertRaises(ValidationError):
+            part.merge_into(self.stock, self.user)
+
+    def test_reader_cannot_link_or_merge(self):
+        other = self.make("BNC cable", 2)
+        self.stock.link_same_type(other)
+        User.objects.create_user(username="reader", password="x", is_student=True)
+        self.client.login(username="reader", password="x")
+        self.assertEqual(self._link(self.stock, self.scope).status_code, 403)
+        resp = self.client.post(
+            reverse("inventory:item_merge", args=[other.pk]), {"merge-into": self.stock.pk}
+        )
+        self.assertEqual(resp.status_code, 403)

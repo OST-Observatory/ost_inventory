@@ -1,3 +1,4 @@
+import uuid
 from collections import deque
 from pathlib import Path
 
@@ -166,6 +167,12 @@ class Item(models.Model):
         verbose_name="mounted on",
         help_text="Another inventory item this one is mounted on.",
     )
+    unit_group = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="Items sharing this value are units of the same type.",
+    )
     comment = models.TextField(blank=True)
     photo = models.ImageField(upload_to=item_photo_upload_to, null=True, blank=True)
     categories = models.ManyToManyField(Category, blank=True, related_name="items")
@@ -189,6 +196,7 @@ class Item(models.Model):
             models.Index(fields=["container"]),
             models.Index(fields=["project"]),
             models.Index(fields=["installed_in"]),
+            models.Index(fields=["unit_group"]),
         ]
 
     def __str__(self):
@@ -312,6 +320,7 @@ class Item(models.Model):
             quantity=quantity,
             quantity_is_approximate=self.quantity_is_approximate and quantity > 1,
             project=self.project,
+            unit_group=self._ensure_unit_group(),
             location=installed_in.location if installed_in else location,
             installed_in=installed_in,
             comment=f"Split off from {self.inventory_number}.",
@@ -328,8 +337,71 @@ class Item(models.Model):
         part.categories.set(self.categories.all())
         self.quantity -= quantity
         self.updated_by = user
-        self.save(update_fields=["quantity", "updated_by", "updated_at"])
+        self.save(update_fields=["quantity", "unit_group", "updated_by", "updated_at"])
         return part
+
+    def _ensure_unit_group(self):
+        if self.unit_group is None:
+            self.unit_group = uuid.uuid4()
+        return self.unit_group
+
+    def same_type_items(self):
+        """Other active items of the same type, largest stock first."""
+        if self.unit_group is None:
+            return type(self).objects.none()
+        return (
+            type(self)
+            .objects.filter(unit_group=self.unit_group, is_active=True)
+            .exclude(pk=self.pk)
+            .order_by("-quantity", "pk")
+        )
+
+    @transaction.atomic
+    def link_same_type(self, other):
+        """Put this item and `other` (with their existing groups) into one group."""
+        if other.pk == self.pk:
+            raise ValidationError("Choose a different item.")
+        group = other.unit_group or self.unit_group or uuid.uuid4()
+        old_groups = {g for g in (self.unit_group, other.unit_group) if g and g != group}
+        items = type(self).objects
+        if old_groups:
+            items.filter(unit_group__in=old_groups).update(unit_group=group)
+        items.filter(pk__in=[self.pk, other.pk]).update(unit_group=group)
+        self.unit_group = other.unit_group = group
+
+    @transaction.atomic
+    def unlink_same_type(self):
+        group = self.unit_group
+        if group is None:
+            return
+        self.unit_group = None
+        self.save(update_fields=["unit_group"])
+        rest = type(self).objects.filter(unit_group=group)
+        if rest.count() == 1:
+            rest.update(unit_group=None)
+
+    @transaction.atomic
+    def merge_into(self, target, user):
+        """Return all units of this item to `target` and deactivate this item."""
+        if target.pk == self.pk or self.unit_group is None or target.unit_group != self.unit_group:
+            raise ValidationError("Merge only into another item of the same type.")
+        if not (self.is_active and target.is_active):
+            raise ValidationError("Both items must be active.")
+        if self.is_lent or target.is_lent:
+            raise ValidationError("Return the loan before merging.")
+        if self.installed_parts.filter(is_active=True).exists():
+            raise ValidationError("Unmount the items mounted on this one first.")
+        target.quantity += self.quantity
+        target.updated_by = user
+        target.save(update_fields=["quantity", "updated_by", "updated_at"])
+        note = f"Merged into {target.inventory_number}."
+        self.comment = f"{self.comment}\n{note}" if self.comment else note
+        self.is_active = False
+        self.installed_in = None
+        self.updated_by = user
+        self.save(
+            update_fields=["comment", "is_active", "installed_in", "updated_by", "updated_at"]
+        )
 
 
 class Loan(models.Model):

@@ -19,7 +19,10 @@ telescope); the mounted item then follows the host’s location.
 as one item per location with a quantity; give anything that is lent, mounted,
 or has a serial number its own item. **Split off…** on the item page moves some
 units into a new item with its own number, stored elsewhere or mounted on a
-host (e.g. to mount or lend one cable out of five).
+host (e.g. to mount or lend one cable out of five). Split-off items stay
+grouped as **Same type**; the item page lists all units and their total, and
+**Link…** groups existing items. **Merge back…** returns all units of an item
+to another one of the same type (e.g. after unmounting) and deactivates it.
 - **Photos** — upload on create/edit, or **Take photo** / **Replace photo** on
 the item page (rear camera on a phone). JPEG, PNG, and WebP; max 5 MB; images
 are re-encoded and stored under UUID names.

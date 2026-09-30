@@ -160,6 +160,37 @@ class SplitItemForm(forms.Form):
         return cleaned
 
 
+class SameTypeForm(forms.Form):
+    same_as = forms.ModelChoiceField(queryset=Item.objects.none(), label="Same type as")
+
+    def __init__(self, *args, item, **kwargs):
+        kwargs.setdefault("prefix", "type")
+        super().__init__(*args, **kwargs)
+        field = self.fields["same_as"]
+        field.queryset = Item.objects.filter(is_active=True).exclude(pk=item.pk)
+        field.label_from_instance = lambda obj: f"{obj.inventory_number} {obj.name}"
+        # Render only the placeholder; the item picker adds the chosen option.
+        field.choices = [("", "Choose an item")]
+
+
+class MergeItemForm(forms.Form):
+    into = forms.ModelChoiceField(queryset=Item.objects.none(), label="Merge into")
+
+    def __init__(self, *args, item, **kwargs):
+        kwargs.setdefault("prefix", "merge")
+        super().__init__(*args, **kwargs)
+        field = self.fields["into"]
+        field.queryset = (
+            item.same_type_items()
+            .exclude(pk__in=Loan.objects.filter(returned_at__isnull=True).values("item_id"))
+            .select_related("location", "location__parent")
+        )
+        field.label_from_instance = lambda obj: (
+            f"{obj.inventory_number} · {obj.quantity_display}× · {obj.location.path_display()}"
+        )
+        field.empty_label = None
+
+
 class ItemForm(forms.ModelForm):
     room = forms.ModelChoiceField(
         queryset=Location.objects.none(),

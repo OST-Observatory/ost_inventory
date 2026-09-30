@@ -57,6 +57,9 @@
     {% if item.is_active and item.quantity > 1 and not item.is_lent %}
     <button type="button" data-dialog-open="split-dialog">Split off…</button>
     {% endif %}
+    {% if item.is_active and can_merge %}
+    <button type="button" data-dialog-open="merge-dialog">Merge back…</button>
+    {% endif %}
     {% if item.is_active %}
       <form method="post" action="{% url 'inventory:item_deactivate' item.pk %}" class="inline js-confirm"
             data-confirm="Deactivate this item?">
@@ -108,6 +111,22 @@
         {% endwith %}
         <dt>Container</dt><dd>{{ item.container|default:"—" }}</dd>
         <dt>Quantity</dt><dd>{{ item.quantity_display }}</dd>
+        <dt>Same type</dt>
+        <dd>
+          {% for other in same_type_items %}
+          <div>
+            <a href="{% url 'inventory:item_detail' other.pk %}"><span class="inv-badge">{{ other.inventory_number }}</span></a>
+            {% if other.name != item.name %}{{ other.name }}{% endif %}
+            {{ other.quantity_display }}× ·
+            {% if other.installed_in %}mounted on {{ other.installed_in.inventory_number }} {{ other.installed_in.name }}{% else %}{{ other.location.path_display }}{% endif %}
+          </div>
+          {% endfor %}
+          {% if same_type_items %}<div class="muted">{% if same_type_approx %}About {% endif %}{{ same_type_total }} units in total</div>{% endif %}
+          {% if not same_type_items %}—{% endif %}
+          {% if can_write and item.is_active %}
+          <button type="button" class="outline secondary still-here-mini" data-dialog-open="same-type-dialog">{% if same_type_items %}Edit…{% else %}Link…{% endif %}</button>
+          {% endif %}
+        </dd>
         <dt>Categories</dt>
         <dd>{% for c in item.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
         <dt>Project</dt><dd>{% if item.project %}{{ item.project.name }}{% else %}—{% endif %}</dd>
@@ -228,6 +247,44 @@
     <p class="field-hint">When mounted, the new item follows the host's location.</p>
     <p class="actions-row">
       <button type="submit">Split off</button>
+      <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
+    </p>
+  </form>
+</dialog>
+{% endif %}
+
+{% if can_write and item.is_active %}
+<dialog id="same-type-dialog" class="ost-dialog">
+  <form method="post" action="{% url 'inventory:item_same_type' item.pk %}">
+    {% csrf_token %}
+    <h2>Same type as…</h2>
+    <p class="muted">Group items that are units of the same thing, e.g. one cable type stored in two rooms. Each item page then lists all units.</p>
+    {% include "inventory/partials/item_host_picker.html" with field=same_type_form.same_as exclude_pk=item.pk search_label="Search item of the same type" %}
+    <p class="actions-row">
+      <button type="submit">Save</button>
+      <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
+    </p>
+  </form>
+  {% if item.unit_group %}
+  <form method="post" action="{% url 'inventory:item_same_type' item.pk %}" class="inline js-confirm"
+        data-confirm="Remove {{ item.inventory_number }} from this group?">
+    {% csrf_token %}
+    <input type="hidden" name="remove" value="1">
+    <button type="submit" class="outline secondary">Remove from group</button>
+  </form>
+  {% endif %}
+</dialog>
+{% endif %}
+
+{% if can_write and item.is_active and can_merge %}
+<dialog id="merge-dialog" class="ost-dialog">
+  <form method="post" action="{% url 'inventory:item_merge' item.pk %}">
+    {% csrf_token %}
+    <h2>Merge back…</h2>
+    <p class="muted">Return {% if item.quantity > 1 %}all {{ item.quantity_display }} units{% else %}this unit{% endif %} of {{ item.inventory_number }} to another item of the same type, e.g. after unmounting. {{ item.inventory_number }} is then deactivated, so remove its label.</p>
+    <label>Merge into {{ merge_form.into }}</label>
+    <p class="actions-row">
+      <button type="submit">Merge</button>
       <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
     </p>
   </form>

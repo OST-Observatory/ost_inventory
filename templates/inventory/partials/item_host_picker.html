@@ -9,7 +9,7 @@
       data-host-search
       placeholder="Search name or #0012…"
       autocomplete="off"
-      aria-label="Search host item"
+      aria-label="{{ search_label|default:'Search host item' }}"
     >
   </p>
   <div class="item-host-results" hidden></div>
