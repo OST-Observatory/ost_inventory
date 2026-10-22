@@ -916,7 +916,10 @@ function bindItemHostPickers() {
     }
     var timer = null;
     var exclude = picker.getAttribute("data-exclude") || "";
+    var kind = picker.getAttribute("data-lookup-kind") || "";
     var scanStatus = picker.querySelector("[data-host-scan-status]");
+    // Container pickers can name a new container, created when the form is saved.
+    var newField = picker.querySelector("[data-new-container]");
 
     function setHost(id, label) {
       var value = id ? String(id) : "";
@@ -935,15 +938,34 @@ function bindItemHostPickers() {
       results.hidden = true;
       results.replaceChildren();
       search.value = "";
+      if (newField) {
+        newField.value = "";
+      }
     }
 
-    function renderRows(rows) {
+    function offerNewContainer(name) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "outline";
+      btn.textContent = "+ New container “" + name + "”";
+      btn.addEventListener("click", function () {
+        setHost("", "");
+        newField.value = name;
+        sayScan("A new container “" + name + "” will be created at this item's place when you save.");
+      });
+      results.appendChild(btn);
+    }
+
+    function renderRows(rows, query) {
       results.replaceChildren();
       if (!rows.length) {
         var empty = document.createElement("p");
         empty.className = "muted";
-        empty.textContent = "No matching items.";
+        empty.textContent = kind === "container" ? "No matching containers." : "No matching items.";
         results.appendChild(empty);
+        if (newField && query) {
+          offerNewContainer(query);
+        }
         results.hidden = false;
         return;
       }
@@ -963,6 +985,9 @@ function bindItemHostPickers() {
         });
         results.appendChild(btn);
       });
+      if (newField && query) {
+        offerNewContainer(query);
+      }
       results.hidden = false;
     }
 
@@ -991,6 +1016,10 @@ function bindItemHostPickers() {
           }
           if (String(data.id) === exclude) {
             sayScan("That is this item itself. Scan another label.");
+            return false;
+          }
+          if (kind === "container" && !data.is_container) {
+            sayScan(data.label + " is not marked as a container. Scan a case, bag, or box.");
             return false;
           }
           setHost(data.id, data.label);
@@ -1026,6 +1055,9 @@ function bindItemHostPickers() {
         if (exclude) {
           url += "&exclude=" + encodeURIComponent(exclude);
         }
+        if (kind) {
+          url += "&kind=" + encodeURIComponent(kind);
+        }
         // GET, so no CSRF token needed — and none is readable, see the file header.
         fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" })
           .then(function (res) {
@@ -1035,12 +1067,78 @@ function bindItemHostPickers() {
             return res.json();
           })
           .then(function (data) {
-            renderRows((data && data.results) || []);
+            renderRows((data && data.results) || [], q);
           })
           .catch(function () {
-            renderRows([]);
+            renderRows([], q);
           });
       }, 200);
+    });
+  });
+}
+
+// <datalist> suggestions are not shown by Firefox for Android, so inputs with a
+// list= get our own suggestion buttons instead (and lose the native popup).
+var SUGGESTION_LIMIT = 8;
+
+function bindSuggestionInputs() {
+  document.querySelectorAll("input[list]").forEach(function (input) {
+    var list = document.getElementById(input.getAttribute("list"));
+    if (!list) {
+      return;
+    }
+    var options = Array.prototype.map.call(list.options, function (opt) {
+      return opt.value;
+    });
+    input.removeAttribute("list");
+    var box = document.createElement("div");
+    box.className = "item-host-results";
+    box.hidden = true;
+    (input.closest("label") || input).insertAdjacentElement("afterend", box);
+
+    function hide() {
+      box.hidden = true;
+      box.replaceChildren();
+    }
+
+    function show() {
+      var q = (input.value || "").trim().toLowerCase();
+      box.replaceChildren();
+      if (!q) {
+        hide();
+        return;
+      }
+      options
+        .filter(function (value) {
+          var v = value.toLowerCase();
+          return v !== q && v.indexOf(q) !== -1;
+        })
+        .slice(0, SUGGESTION_LIMIT)
+        .forEach(function (value) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "outline secondary";
+          btn.textContent = value;
+          // mousedown keeps the input focused, so blur does not hide the list first.
+          btn.addEventListener("mousedown", function (event) {
+            event.preventDefault();
+          });
+          btn.addEventListener("click", function () {
+            input.value = value;
+            hide();
+          });
+          box.appendChild(btn);
+        });
+      box.hidden = !box.children.length;
+    }
+
+    input.addEventListener("input", show);
+    input.addEventListener("focus", show);
+    input.addEventListener("blur", hide);
+    input.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        hide();
+      }
     });
   });
 }
@@ -1145,6 +1243,7 @@ function bindUi() {
   bindNavDrawer();
   bindRoomPlaceSelects();
   bindItemHostPickers();
+  bindSuggestionInputs();
   bindCategoryPicker();
   bindSharePng();
   bindLabelScanners();

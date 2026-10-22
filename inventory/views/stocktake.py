@@ -1,10 +1,11 @@
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from accounts.permissions import write_required
-from inventory.models import Location, Stocktake
+from inventory.models import Item, Location, Stocktake
 from inventory.stocktake import (
     SESSION_KEY,
     classify_scans,
@@ -23,27 +24,42 @@ def stocktake_index(request):
         if open_one:
             messages.info(request, "You already have an open stocktake.")
             return redirect("inventory:stocktake_detail", pk=open_one.pk)
-        scope_id = request.POST.get("scope_location") or None
-        scope = None
-        if scope_id:
-            scope = get_object_or_404(Location, pk=scope_id, parent__isnull=True)
-        stocktake = Stocktake.objects.create(started_by=request.user, scope_location=scope)
+        # "scope" comes from the start form ("room:<pk>" / "container:<pk>");
+        # scope_location / scope_container from links elsewhere.
+        kind, _, raw = (request.POST.get("scope") or "").partition(":")
+        room_id = request.POST.get("scope_location") or (raw if kind == "room" else None)
+        box_id = request.POST.get("scope_container") or (raw if kind == "container" else None)
+        room = box = None
+        if box_id:
+            box = get_object_or_404(Item, pk=box_id, is_container=True, is_active=True)
+        elif room_id:
+            room = get_object_or_404(Location, pk=room_id, parent__isnull=True)
+        stocktake = Stocktake.objects.create(
+            started_by=request.user,
+            scope_location=room,
+            scope_container=box,
+            current_container=box,
+            current_location=box.location if box else None,
+        )
         set_active_stocktake(request, stocktake)
-        if scope:
-            messages.success(request, f"Stocktake started for {scope.name}.")
-        else:
-            messages.success(request, "Stocktake started for the whole inventory.")
+        messages.success(request, f"Stocktake started: {stocktake.scope_label}.")
         return redirect("inventory:stocktake_detail", pk=stocktake.pk)
     recent = (
         Stocktake.objects.filter(started_by=request.user)
-        .select_related("scope_location")
+        .select_related("scope_location", "scope_container")
         .order_by("-started_at")[:20]
     )
     rooms = Location.objects.filter(parent__isnull=True).order_by("name")
+    containers = Item.objects.filter(is_active=True, is_container=True).order_by("name", "pk")
     return render(
         request,
         "inventory/stocktake.html",
-        {"open_stocktake": open_one, "recent": recent, "rooms": rooms},
+        {
+            "open_stocktake": open_one,
+            "recent": recent,
+            "rooms": rooms,
+            "containers": containers,
+        },
     )
 
 
@@ -51,7 +67,13 @@ def stocktake_index(request):
 @require_GET
 def stocktake_detail(request, pk):
     stocktake = get_object_or_404(
-        Stocktake.objects.select_related("scope_location", "current_location", "started_by"),
+        Stocktake.objects.select_related(
+            "scope_location",
+            "current_location",
+            "started_by",
+            "scope_container",
+            "current_container",
+        ),
         pk=pk,
         started_by=request.user,
     )
@@ -95,20 +117,31 @@ def stocktake_finish(request, pk):
 @require_POST
 def stocktake_move_here(request, pk, scan_id):
     stocktake = get_object_or_404(Stocktake, pk=pk, started_by=request.user)
-    scan = get_object_or_404(stocktake.scans.select_related("item"), pk=scan_id)
-    if not scan.found_location_id:
+    scan = get_object_or_404(
+        stocktake.scans.select_related("item", "found_container"), pk=scan_id
+    )
+    item = scan.item
+    box = scan.found_container
+    if box is None and not scan.found_location_id:
         messages.error(request, "Scan a location first, then move the item there.")
         return redirect("inventory:stocktake_detail", pk=stocktake.pk)
-    item = scan.item
-    item.location = scan.found_location
+    # Found loose or in another container: it is no longer mounted where it was.
+    item.installed_in = None
+    item.stored_in = box
+    if box is None:
+        item.location = scan.found_location
     item.updated_by = request.user
-    item.save(update_fields=["location", "updated_by", "updated_at"])
-    scan.expected_location = scan.found_location
-    scan.save(update_fields=["expected_location"])
-    messages.success(
-        request,
-        f"{item.inventory_number} moved to {scan.found_location.path_display()}.",
-    )
+    try:
+        item.full_clean()
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0])
+        return redirect("inventory:stocktake_detail", pk=stocktake.pk)
+    item.save()
+    scan.expected_location = item.location
+    scan.expected_container = box
+    scan.save(update_fields=["expected_location", "expected_container"])
+    target = f"{box.inventory_number} {box.name}" if box else item.location.path_display()
+    messages.success(request, f"{item.inventory_number} moved to {target}.")
     return redirect("inventory:stocktake_detail", pk=stocktake.pk)
 
 

@@ -3,7 +3,7 @@
 {% block title %}Stocktake {{ stocktake.pk }} — OST Inventory{% endblock %}
 {% block content %}
 <p class="muted"><a href="{% url 'inventory:stocktake' %}">All stocktakes</a></p>
-<h1>Stocktake {% if stocktake.scope_location %}· {{ stocktake.scope_location.name }}{% endif %}</h1>
+<h1>Stocktake · {{ stocktake.scope_label }}</h1>
 <p class="muted">
   Started {{ stocktake.started_at|naturaltime }}
   · {{ report.scan_count }} scanned of {{ expected_total }} expected
@@ -19,6 +19,11 @@
       <strong>{{ stocktake.current_location.path_display }}</strong>
     {% else %}
       <span class="muted">Scan a location label first</span>
+    {% endif %}
+    {% if stocktake.current_container %}
+      <br>Counting inside:
+      <strong><a href="{% url 'inventory:item_detail' stocktake.current_container_id %}">{{ stocktake.current_container.inventory_number }} {{ stocktake.current_container.name }}</a></strong>
+      <span class="muted">· scan a location label to leave it</span>
     {% endif %}
   </p>
   {% include "inventory/partials/scan_panel.html" with video_id="stocktake-video" status_id="stocktake-camera-fallback" start_id="stocktake-camera-start" stop_id="stocktake-camera-stop" mode="stocktake" miss_id="stocktake-scan-miss" hint="Point the camera at a QR code or barcode." %}
@@ -85,7 +90,7 @@
       <tr>
         <td><a href="{% url 'inventory:item_detail' scan.item_id %}"><span class="inv-badge">{{ scan.item.inventory_number }}</span></a></td>
         <td>{{ scan.item.name }}</td>
-        <td>{{ scan.expected_location.path_display }}</td>
+        <td>{{ scan.expected_location.path_display }}{% if scan.expected_container %} · in {{ scan.expected_container.name }}{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -105,8 +110,8 @@
       <tr>
         <td><a href="{% url 'inventory:item_detail' scan.item_id %}"><span class="inv-badge">{{ scan.item.inventory_number }}</span></a></td>
         <td>{{ scan.item.name }}</td>
-        <td>{{ scan.expected_location.path_display }}</td>
-        <td>{{ scan.found_location.path_display }}</td>
+        <td>{% if scan.expected_container %}in {{ scan.expected_container.name }}{% else %}{{ scan.expected_location.path_display }}{% endif %}</td>
+        <td>{% if scan.found_container %}in {{ scan.found_container.name }}{% else %}{{ scan.found_location.path_display }}{% endif %}</td>
         <td class="col-actions">
           <form method="post" action="{% url 'inventory:stocktake_move_here' stocktake.pk scan.pk %}" class="inline">
             {% csrf_token %}

@@ -652,6 +652,7 @@ td:has(.inline),
 .chip-overdue { background: #f3d0d0; color: var(--overdue); }
 .chip-inactive { background: #e4e1dc; color: #555; }
 .chip-available { background: #d8efe3; color: var(--available); }
+.chip-container { background: #dde6f3; color: #2b4a75; }
 .chip-filter {
   display: inline-flex;
   align-items: center;
@@ -668,6 +669,7 @@ td:has(.inline),
 [data-theme="dark"] .chip-overdue { background: #3a2228; }
 [data-theme="dark"] .chip-inactive { background: #2a3142; color: #c5c9d4; }
 [data-theme="dark"] .chip-available { background: #1e3a30; }
+[data-theme="dark"] .chip-container { background: #24324a; color: #b9cbe8; }
 [data-theme="dark"] .chip-filter { background: #2a3142; }
 [data-theme="dark"] .chip-filter:hover { background: #343c50; }
 [data-theme="dark"] .inv-badge { background: #2a3142; }

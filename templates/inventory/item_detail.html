@@ -9,6 +9,7 @@
     <h1>{{ item.name }}</h1>
     <p class="item-head-meta">
       <span class="inv-badge">{{ item.inventory_number }}</span>
+      {% if item.is_container %}<span class="chip chip-container">Container</span>{% endif %}
       {% if item.is_lent %}<span class="chip chip-loaned">On loan</span>{% endif %}
       {% if not item.is_active %}<span class="chip chip-inactive">Inactive</span>{% endif %}
       {% if item.is_active and not item.is_lent %}<span class="chip chip-available">Available</span>{% endif %}
@@ -55,6 +56,7 @@
     {% endif %}
     <a href="{% url 'inventory:item_edit' item.pk %}" role="button">Edit</a>
     <button type="button" data-dialog-open="install-in-dialog">Mount on…</button>
+    <button type="button" data-dialog-open="store-in-dialog">Store in…</button>
     {% if item.is_active and item.quantity > 1 and not item.is_lent %}
     <button type="button" data-dialog-open="split-dialog">Split off…</button>
     {% endif %}
@@ -110,7 +112,16 @@
         </dd>
         {% endif %}
         {% endwith %}
-        <dt>Container</dt><dd>{{ item.container|default:"—" }}</dd>
+        <dt>Stored in</dt>
+        <dd>
+          {% with box=item.effective_container %}
+          {% if box %}
+            <a href="{% url 'inventory:item_detail' box.pk %}">{{ box.inventory_number }} {{ box.name }}</a>
+            {% if not item.stored_in_id %}<span class="muted">(with {{ item.installed_in.inventory_number }} {{ item.installed_in.name }})</span>{% endif %}
+          {% else %}—{% endif %}
+          {% endwith %}
+          {% if item.container %}<div class="muted">Old container note: “{{ item.container }}”</div>{% endif %}
+        </dd>
         <dt>Quantity</dt><dd>{{ item.quantity_display }}</dd>
         <dt>Same type</dt>
         <dd>
@@ -142,6 +153,42 @@
     </div>
   </div>
 </div>
+
+{% if item.is_container %}
+<section class="block-card" id="contents">
+  <h2>Contents</h2>
+  {% if contents %}
+  <table class="item-table">
+    <thead><tr><th>#</th><th>Name</th></tr></thead>
+    <tbody>
+      {% for part in contents %}
+      <tr>
+        <td class="col-number"><a href="{% url 'inventory:item_detail' part.pk %}"><span class="inv-badge">{{ part.inventory_number }}</span></a></td>
+        <td class="col-name">
+          <a href="{% url 'inventory:item_detail' part.pk %}">{{ part.name }}</a>
+          {% if part.quantity > 1 %}<span class="muted">×&nbsp;{{ part.quantity_display }}</span>{% endif %}
+          {% if part.is_container %}<span class="chip chip-container">Container</span>{% endif %}
+          {% with mounted=part.installed_parts.all %}{% if mounted %}<div class="muted">with {% for m in mounted %}{{ m.inventory_number }} {{ m.name }}{% if not forloop.last %}, {% endif %}{% endfor %} mounted</div>{% endif %}{% endwith %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Nothing is stored here yet. Use “Store in…” on an item, or choose this container in its form.</p>
+  {% endif %}
+  {% if can_write and item.is_active %}
+  <div class="actions-row">
+    {% if contents %}<button type="button" class="outline secondary" data-dialog-open="move-contents-dialog">Move contents…</button>{% endif %}
+    <form method="post" action="{% url 'inventory:stocktake' %}">
+      {% csrf_token %}
+      <input type="hidden" name="scope_container" value="{{ item.pk }}">
+      <button type="submit" class="outline secondary">Stocktake this container</button>
+    </form>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
 
 {% if item.is_lent or can_write and item.is_active %}
 <div class="block-card" id="loan">
@@ -186,6 +233,7 @@
 </div>
 {% endif %}
 
+
 <div class="block-card">
   <h2>Loan history</h2>
   {% if loans %}
@@ -220,6 +268,34 @@
 </div>
 
 {% if can_write %}
+<dialog id="store-in-dialog" class="ost-dialog">
+  <form method="post" action="{% url 'inventory:item_store' item.pk %}">
+    {% csrf_token %}
+    <h2>Store in…</h2>
+    <p class="muted">Choose the case, bag, or box this item is kept in. It then follows the container's location{% if item.installed_in %} and is no longer mounted on {{ item.installed_in.inventory_number }}{% endif %}. Choose “Not stored in a container” to take it out.</p>
+    {% include "inventory/partials/item_host_picker.html" with field=store_form.stored_in exclude_pk=item.pk kind="container" new_name_field=store_form.new_container_name search_label="Search container" %}
+    <p class="actions-row">
+      <button type="submit">Save</button>
+      <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
+    </p>
+  </form>
+</dialog>
+
+{% if item.is_container and move_form %}
+<dialog id="move-contents-dialog" class="ost-dialog">
+  <form method="post" action="{% url 'inventory:item_move_contents' item.pk %}">
+    {% csrf_token %}
+    <h2>Move contents…</h2>
+    <p class="muted">Move everything stored in {{ item.inventory_number }} {{ item.name }} to another container, e.g. to merge two boxes. Mounted parts move with their hosts.</p>
+    {% include "inventory/partials/item_host_picker.html" with field=move_form.into exclude_pk=item.pk kind="container" search_label="Search container" %}
+    <p class="actions-row">
+      <button type="submit">Move</button>
+      <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
+    </p>
+  </form>
+</dialog>
+{% endif %}
+
 <dialog id="install-in-dialog" class="ost-dialog">
   <form method="post" action="{% url 'inventory:item_install' item.pk %}">
     {% csrf_token %}

@@ -34,6 +34,8 @@ class ItemResource(resources.ModelResource):
             "project__name",
             "location",
             "container",
+            "is_container",
+            "stored_in",
             "installed_in",
             "comment",
             "is_active",
@@ -46,15 +48,20 @@ class ItemAdmin(ImportExportModelAdmin):
         "id",
         "name",
         "location",
-        "container",
+        "is_container",
+        "stored_in",
         "installed_in",
         "project",
         "is_active",
         "is_lent_display",
     )
-    list_filter = ("is_active", "categories", "project", "location")
-    search_fields = ("name", "description", "comment", "container", "installed_in__name")
-    raw_id_fields = ("location", "project", "installed_in", "created_by", "updated_by")
+    list_filter = ("is_active", "is_container", "categories", "project", "location")
+    search_fields = (
+        "name", "description", "comment", "container", "installed_in__name", "stored_in__name"
+    )
+    raw_id_fields = (
+        "location", "project", "installed_in", "stored_in", "created_by", "updated_by"
+    )
     filter_horizontal = ("categories",)
 
     @admin.display(boolean=True, description="On loan")

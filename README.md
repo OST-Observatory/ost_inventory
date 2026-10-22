@@ -12,7 +12,7 @@ never served as public files; they go through the app after a permission check.
 container, and host item. PostgreSQL adds full-text search and typo-tolerant
 matching (`pg_trgm`). SQLite (development) uses case-insensitive contains.
 - **Items** — room plus optional place (e.g. `PRA / 2a`), 1–4 categories,
-optional project and container, quantity (exact or approximate), description,
+optional project, quantity (exact or approximate), description,
 comment, photo. **Mounted on** links an item to a host (e.g. a camera on a
 telescope); the mounted item then follows the host’s location. Wherever an
 item is picked (**Mount on…**, **Split off…**, **Same type as…**, edit form),
@@ -35,6 +35,14 @@ confirmation. Without JavaScript the server reduces uploads up to
 Borrower name and contact are hidden unless the user has that permission.
 Overdue reminders can be sent daily.
 - **Locations** — rooms and places, with a per-location item list.
+- **Containers** — a case, bag, or box is an item marked **container**, so it
+keeps its own number, label, photo, and loans. Items are **stored in** a
+container (form, **Store in…**, or by scanning its label) and follow its
+location; a mounted item is stored together with its host. A container's page
+lists its contents; **Move contents…** merges two containers, renaming is a
+normal edit. **Tools → Containers** lists all of them. In the item form a new
+container can be named on the spot (it is created at the item's place under the
+category “Container”).
 - **Labels** — PNG, ZIP, and ODS for T50-style sizes (50×80, 40×30, 40×20,
 30×20 mm, plus a cable flag). Choose a **QR code** (short `/i/<id>/` or
 `/l/<id>/` URL) or a **Code 128 barcode** of the inventory number (`#0012`, or
@@ -46,7 +54,9 @@ jumps to the matching item or location. While the camera runs, **1× / 2× / 3×
 zoom and **Camera n/m** (switch between rear cameras) help phones whose default
 camera cannot focus close up; the browser remembers both choices.
 - **Stocktake** — a dated physical count (separate from **Still here** / not
-seen recently). Items with several units ask for a count after the scan
+seen recently), for the whole inventory, one room, or one container. Scanning
+a container's label counts the items inside it until a location label is
+scanned; items found in another container can be moved into the one at hand. Items with several units ask for a count after the scan
 (**All 5 here**, or the number seen; approximate items take a new estimate).
 **Quantity differs** in the report lists mismatches with **Update quantity**.
 - **CSV** — import (preview, then commit) and export. Matching on import is
@@ -673,9 +683,12 @@ rotated so the 30 mm side runs across the head. Print darkness is a setting of
 Required: `name`, `location_path` (`Room` or `Room/Place`, e.g. `PRA/2a`).
 
 Optional: `description`, `quantity`, `quantity_approximate` (`yes` / `true` /
-`1`), `container`, `categories` (semicolon-separated, max 4), `project`,
-`comment`, `installed_in` (inventory number such as `#0004` or numeric id of the
-item this one is mounted on; the host must already exist).
+`1`), `categories` (semicolon-separated, max 4), `project`, `comment`,
+`installed_in` (inventory number such as `#0004` or numeric id of the item this
+one is mounted on; the host must already exist), `stored_in` (inventory number
+of the container it is stored in), `is_container` (`yes` / `true` / `1`). The
+old free-text `container` column is still read and written until the container
+migration below has run.
 
 Limits: 2 MB, 2000 rows, 500 characters per field, location depth 2. Formula-looking
 cells are sanitised on export. Web import is under **Tools → Import**; the
@@ -683,6 +696,28 @@ management command is equivalent.
 
 An active item with the same name at the same location is updated; otherwise a
 row is created.
+
+### Container migration (once)
+
+Older versions stored the container as free text on each item. Two commands turn
+that into container items; a person reviews the proposal in between:
+
+```bash
+# On the server, as the app user:
+.venv/bin/python manage.py container_plan --out /tmp/containers.csv
+# Edit the CSV (LibreOffice): column "action" per container text and room is
+#   link (target #0537 becomes the container), new (target = name of a new
+#   container), merge (target = another text in the same room), mount (old
+#   "belongs to" text: target #0693 is the host), clear (drop the text);
+# rows with kind=item override single items: keep, store (#0536 or a container
+# text of that room), mount (#0677), unmount.
+.venv/bin/python manage.py container_apply /tmp/containers.csv          # dry run
+.venv/bin/python manage.py container_apply /tmp/containers.csv --commit --user <name>
+```
+
+The dry run lists every change, including items that move to their container's
+place. Nothing is saved while there are errors. New containers get new numbers
+and need labels (**Tools → Labels**). Back up the database before `--commit`.
 
 ---
 

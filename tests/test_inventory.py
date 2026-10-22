@@ -336,7 +336,7 @@ class InventoryFlowTests(TestCase):
                 "room": self.loc.pk,
                 "quantity": 80,
                 "quantity_is_approximate": "on",
-                "container": "Crate 4",
+                "new_container_name": "Crate 4",
                 "project_name": "Sternwarte 2026",
                 "category_1": "Hardware",
                 "description": "",
@@ -347,7 +347,11 @@ class InventoryFlowTests(TestCase):
         item = Item.objects.get(name="M4 screws")
         self.assertEqual(item.quantity_display, "~80")
         self.assertTrue(item.quantity_is_approximate)
-        self.assertEqual(item.container, "Crate 4")
+        crate = item.stored_in
+        self.assertEqual(crate.name, "Crate 4")
+        self.assertTrue(crate.is_container)
+        self.assertEqual(crate.location_id, self.loc.pk)
+        self.assertEqual([c.name for c in crate.categories.all()], ["Container"])
         self.assertEqual(item.project.name, "Sternwarte 2026")
 
         reused, created = Project.get_or_create_by_name("sternwarte 2026")
@@ -357,7 +361,7 @@ class InventoryFlowTests(TestCase):
         self.client.login(username="reader", password="x")
         search = self.client.get(reverse("inventory:search"), {"project": item.project_id})
         self.assertContains(search, "M4 screws")
-        search = self.client.get(reverse("inventory:search"), {"container": "Crate 4"})
+        search = self.client.get(reverse("inventory:search"), {"container": crate.pk})
         self.assertContains(search, "M4 screws")
         detail = self.client.get(reverse("inventory:item_detail", args=[item.pk]))
         self.assertContains(detail, "~80")

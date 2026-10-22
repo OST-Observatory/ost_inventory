@@ -48,21 +48,25 @@ def expected_items(stocktake: Stocktake) -> QuerySet[Item]:
     qs = Item.objects.filter(is_active=True).select_related(
         "location", "location__parent"
     )
-    ids = scope_location_ids(stocktake)
-    if ids is not None:
-        qs = qs.filter(location_id__in=ids)
+    if stocktake.scope_container_id:
+        qs = qs.filter(pk__in=stocktake.scope_container.dependent_pks())
+    else:
+        ids = scope_location_ids(stocktake)
+        if ids is not None:
+            qs = qs.filter(location_id__in=ids)
     return qs.order_by("name")
 
 
 def items_at_current(stocktake: Stocktake) -> QuerySet[Item]:
-    if not stocktake.current_location_id:
+    """Items expected where the user is counting: the open container, else the place."""
+    qs = Item.objects.filter(is_active=True)
+    if stocktake.current_container_id:
+        qs = qs.filter(pk__in=stocktake.current_container.dependent_pks())
+    elif stocktake.current_location_id:
+        qs = qs.filter(location_id__in=stocktake.current_location.get_descendant_ids())
+    else:
         return Item.objects.none()
-    ids = stocktake.current_location.get_descendant_ids()
-    return (
-        Item.objects.filter(is_active=True, location_id__in=ids)
-        .select_related("location", "location__parent")
-        .order_by("name")
-    )
+    return qs.select_related("location", "location__parent").order_by("name")
 
 
 def record_item_scan(stocktake: Stocktake, item: Item, user) -> StocktakeScan:
@@ -77,10 +81,16 @@ def record_item_scan(stocktake: Stocktake, item: Item, user) -> StocktakeScan:
             "scanned_at": now,
             "scanned_by": user,
             "expected_location": item.location,
+            "expected_container": item.effective_container,
             "expected_quantity": item.quantity,
             "found_location": stocktake.current_location,
+            "found_container": stocktake.current_container,
         },
     )
+    if item.is_container:
+        # Scanning a container opens it: the next items are counted inside it.
+        stocktake.current_container = item
+        stocktake.save(update_fields=["current_container"])
     return scan
 
 
@@ -92,22 +102,30 @@ def classify_scans(stocktake: Stocktake) -> dict:
             "expected_location__parent",
             "found_location",
             "found_location__parent",
+            "expected_container",
+            "found_container",
         ).order_by("item__name")
     )
     scanned_ids = {scan.item_id for scan in scans}
     missing = list(expected_items(stocktake).exclude(pk__in=scanned_ids))
     scope_ids = scope_location_ids(stocktake)
+    scope_items = (
+        set(stocktake.scope_container.dependent_pks()) if stocktake.scope_container_id else None
+    )
     found_here = []
     found_elsewhere = []
     found_unlocated = []
     unexpected = []
     for scan in scans:
-        in_scope = scope_ids is None or scan.expected_location_id in scope_ids
+        if scope_items is not None:
+            in_scope = scan.item_id in scope_items or scan.item_id == stocktake.scope_container_id
+        else:
+            in_scope = scope_ids is None or scan.expected_location_id in scope_ids
         if not in_scope:
             unexpected.append(scan)
-        if scan.found_location_id is None:
+        if scan.found_location_id is None and scan.found_container_id is None:
             found_unlocated.append(scan)
-        elif scan.found_location_id == scan.expected_location_id:
+        elif scan.found_where_expected:
             found_here.append(scan)
         else:
             found_elsewhere.append(scan)

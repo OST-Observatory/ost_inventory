@@ -18,6 +18,22 @@ def _as_bool(raw: str) -> bool:
     return raw.strip().lower() in _TRUE_VALUES
 
 
+def _item_ref(row, column):
+    """Resolve an "#0004" column. Returns (item, clear, error)."""
+    if column not in row:
+        return None, False, None
+    raw = row.get(column, "").strip()
+    if not raw:
+        return None, True, None
+    item = Item.lookup_by_ref(raw)
+    if item is not None:
+        return item, False, None
+    probe = raw[1:].strip() if raw.startswith("#") else raw
+    if not probe.isdigit():
+        return None, False, f"{column} must be an inventory number such as #0004"
+    return None, False, f"{column} item {raw} was not found"
+
+
 def _flatten_validation(exc: ValidationError):
     if hasattr(exc, "message_dict"):
         messages = []
@@ -98,36 +114,17 @@ def import_rows(rows, *, user, dry_run=True):
                 errors.append({"line": line, "error": f"location: {exc}"})
                 continue
 
-            host = None
-            clear_installed = False
-            if "installed_in" in row:
-                installed_raw = row.get("installed_in", "").strip()
-                if installed_raw:
-                    host = Item.lookup_by_ref(installed_raw)
-                    if host is None:
-                        probe = (
-                            installed_raw[1:].strip()
-                            if installed_raw.startswith("#")
-                            else installed_raw
-                        )
-                        if not probe.isdigit():
-                            errors.append(
-                                {
-                                    "line": line,
-                                    "error": "installed_in must be an inventory number such as #0004",
-                                }
-                            )
-                        else:
-                            errors.append(
-                                {
-                                    "line": line,
-                                    "error": f"installed_in item {installed_raw} was not found",
-                                }
-                            )
-                        continue
-                    location = host.location
-                else:
-                    clear_installed = True
+            host, clear_installed, error = _item_ref(row, "installed_in")
+            box, clear_stored, box_error = _item_ref(row, "stored_in")
+            if error or box_error:
+                errors.append({"line": line, "error": error or box_error})
+                continue
+            if host:
+                location = host.location
+            elif box:
+                location = box.location
+            container_raw = row.get("is_container", "").strip()
+            is_container = _as_bool(container_raw) if container_raw else None
 
             quantity_raw = row.get("quantity", "").strip() or "1"
             try:
@@ -203,6 +200,13 @@ def import_rows(rows, *, user, dry_run=True):
                     existing.location = host.location
                 elif clear_installed:
                     existing.installed_in = None
+                if box:
+                    existing.stored_in = box
+                    existing.location = box.location
+                elif clear_stored:
+                    existing.stored_in = None
+                if is_container is not None:
+                    existing.is_container = is_container
                 try:
                     existing.clean()
                 except ValidationError as exc:
@@ -227,6 +231,8 @@ def import_rows(rows, *, user, dry_run=True):
                     location=location,
                     container=container,
                     installed_in=host,
+                    stored_in=box,
+                    is_container=bool(is_container),
                     comment=row.get("comment", ""),
                     created_by=user,
                     updated_by=user,

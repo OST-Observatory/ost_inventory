@@ -23,10 +23,12 @@ from inventory.forms import (
     ItemForm,
     LoanForm,
     MergeItemForm,
+    MoveContentsForm,
     PlaceForm,
     RoomForm,
     SameTypeForm,
     SplitItemForm,
+    StoredInForm,
 )
 from inventory.images import process_item_photo
 from inventory.labels import (
@@ -47,13 +49,15 @@ def _item_form_catalogs():
     return {
         "categories": Category.objects.all(),
         "projects": Project.objects.all(),
-        "containers": (
-            Item.objects.exclude(container="")
-            .order_by("container")
-            .values_list("container", flat=True)
-            .distinct()
-        ),
     }
+
+
+def active_containers():
+    return (
+        Item.objects.filter(is_active=True, is_container=True)
+        .select_related("location", "location__parent")
+        .order_by("name", "pk")
+    )
 
 
 class SearchView(ReadRequiredMixin, ListView):
@@ -64,7 +68,7 @@ class SearchView(ReadRequiredMixin, ListView):
 
     def get_queryset(self):
         qs = Item.objects.select_related(
-            "location", "location__parent", "project", "installed_in"
+            "location", "location__parent", "project", "installed_in", "stored_in"
         ).prefetch_related(
             "categories",
             Prefetch(
@@ -101,12 +105,7 @@ class SearchView(ReadRequiredMixin, ListView):
         ctx["categories"] = Category.objects.all()
         ctx["locations"] = Location.objects.all().select_related("parent")
         ctx["projects"] = Project.objects.all()
-        ctx["containers"] = (
-            Item.objects.exclude(container="")
-            .order_by("container")
-            .values_list("container", flat=True)
-            .distinct()
-        )
+        ctx["containers"] = active_containers()
         return ctx
 
 
@@ -125,6 +124,7 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
                 "created_by",
                 "updated_by",
                 "installed_in",
+                "stored_in",
             ).prefetch_related("categories", "loans__recorded_by", "installed_parts"),
         )
 
@@ -139,6 +139,8 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
                 record_item_scan(stocktake, self.object, request.user)
                 set_active_stocktake(request, stocktake)
                 note = " Count the units below." if self.object.quantity > 1 else ""
+                if self.object.is_container:
+                    note += " Now counting inside it; scan a location label to leave it."
                 messages.success(
                     request,
                     f"Recorded {self.object.inventory_number} {self.object.name}.{note}",
@@ -159,6 +161,15 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
             get_label_size(ctx["selected_size"]),
         )
         ctx["install_form"] = InstalledInForm(item=self.object)
+        ctx["store_form"] = StoredInForm(item=self.object)
+        if self.object.is_container:
+            ctx["move_form"] = MoveContentsForm(item=self.object)
+            ctx["contents"] = list(
+                self.object.contents.filter(is_active=True)
+                .select_related("location", "location__parent")
+                .prefetch_related("installed_parts")
+                .order_by("name", "pk")
+            )
         ctx["split_form"] = SplitItemForm(item=self.object)
         ctx["same_type_form"] = SameTypeForm(item=self.object)
         ctx["merge_form"] = MergeItemForm(item=self.object)
@@ -271,12 +282,14 @@ def item_host_lookup(request):
     if not q:
         return JsonResponse({"results": []})
     qs = Item.objects.filter(is_active=True).select_related("location", "location__parent")
+    if request.GET.get("kind") == "container":
+        qs = qs.filter(is_container=True)
     raw_exclude = request.GET.get("exclude") or ""
     if raw_exclude.isdigit():
         skip = [int(raw_exclude)]
         source = Item.objects.filter(pk=skip[0]).first()
         if source:
-            skip.extend(source.installed_part_pks())
+            skip.extend(source.dependent_pks())
         qs = qs.exclude(pk__in=skip)
     qs = qs.filter(Q(name__icontains=q) | _inventory_number_q(q)).order_by("name")[:20]
     return JsonResponse(
@@ -305,6 +318,8 @@ def item_install(request, pk):
     host = form.cleaned_data.get("installed_in")
     item.installed_in = host
     if host:
+        # Mounted items are stored together with their host.
+        item.stored_in = None
         item.location = host.location
     item.updated_by = request.user
     try:
@@ -321,6 +336,82 @@ def item_install(request, pk):
     else:
         messages.success(request, "No longer mounted on another item.")
     return redirect("inventory:item_detail", pk=pk)
+
+
+@write_required
+def item_store(request, pk):
+    item = get_object_or_404(Item, pk=pk)
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required")
+    form = StoredInForm(request.POST, item=item)
+    if not form.is_valid():
+        messages.error(request, "Could not update the container.")
+        return redirect("inventory:item_detail", pk=pk)
+    container = form.cleaned_data.get("stored_in")
+    new_name = form.cleaned_data.get("new_container_name")
+    with transaction.atomic():
+        if not container and new_name:
+            container = Item.create_container(new_name, item.location, request.user)
+        item.stored_in = container
+        if container:
+            item.installed_in = None
+            item.location = container.location
+        item.updated_by = request.user
+        try:
+            item.full_clean()
+        except ValidationError as exc:
+            transaction.set_rollback(True)
+            errors = getattr(exc, "message_dict", {}).get("stored_in") or exc.messages
+            messages.error(request, errors[0] if errors else "Could not update the container.")
+            return redirect("inventory:item_detail", pk=pk)
+        item.save()
+    if container:
+        messages.success(
+            request, f"Stored in {container.inventory_number} {container.name}."
+        )
+    else:
+        messages.success(request, "No longer stored in a container.")
+    return redirect("inventory:item_detail", pk=pk)
+
+
+@write_required
+def item_move_contents(request, pk):
+    source = get_object_or_404(Item, pk=pk, is_container=True)
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required")
+    form = MoveContentsForm(request.POST, item=source)
+    if not form.is_valid():
+        messages.error(request, "Choose another container.")
+        return redirect("inventory:item_detail", pk=pk)
+    target = form.cleaned_data["into"]
+    with transaction.atomic():
+        moved = 0
+        for item in source.contents.all():
+            item.stored_in = target
+            item.updated_by = request.user
+            item.save()
+            moved += 1
+    messages.success(
+        request,
+        f"Moved {moved} item{'s' if moved != 1 else ''} to {target.inventory_number} "
+        f"{target.name}. Deactivate {source.inventory_number} if the container is gone.",
+    )
+    return redirect("inventory:item_detail", pk=target.pk)
+
+
+class ContainerListView(ReadRequiredMixin, ListView):
+    template_name = "inventory/containers.html"
+    context_object_name = "containers"
+
+    def get_queryset(self):
+        return active_containers().annotate(
+            content_count=Count("contents", filter=Q(contents__is_active=True))
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["legacy_count"] = Item.objects.exclude(container="").count()
+        return ctx
 
 
 @write_required
@@ -644,7 +735,8 @@ class LocationDetailView(ReadRequiredMixin, DetailView):
             if stocktake:
                 self.object = self.get_object()
                 stocktake.current_location = self.object
-                stocktake.save(update_fields=["current_location"])
+                stocktake.current_container = None
+                stocktake.save(update_fields=["current_location", "current_container"])
                 set_active_stocktake(request, stocktake)
                 messages.success(
                     request, f"Now counting {self.object.path_display()}."
@@ -657,7 +749,7 @@ class LocationDetailView(ReadRequiredMixin, DetailView):
         ids = self.object.get_descendant_ids()
         ctx["items"] = (
             Item.objects.filter(is_active=True, location_id__in=ids)
-            .select_related("location", "location__parent", "project", "installed_in")
+            .select_related("location", "location__parent", "project", "installed_in", "stored_in")
             .order_by("name")
         )
         ctx["children"] = self.object.children.order_by("name")

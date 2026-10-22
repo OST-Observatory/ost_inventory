@@ -2,6 +2,7 @@
   class="item-host-picker"
   data-lookup-url="{% url 'inventory:item_host_lookup' %}"
   {% if exclude_pk %}data-exclude="{{ exclude_pk }}"{% endif %}
+  {% if kind %}data-lookup-kind="{{ kind }}"{% endif %}
 >
   <p class="toolbar">
     <input
@@ -21,4 +22,8 @@
   <div class="item-host-results" hidden></div>
   {{ field }}
   {{ field.errors }}
+  {% if new_name_field %}
+  <input type="hidden" name="{{ new_name_field.html_name }}" value="{{ new_name_field.value|default:'' }}" data-new-container>
+  {{ new_name_field.errors }}
+  {% endif %}
 </div>

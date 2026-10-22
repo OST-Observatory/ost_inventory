@@ -1,6 +1,7 @@
 from django.urls import path
 
 from inventory.views import (
+    ContainerListView,
     CurrentLoansView,
     ItemCreateView,
     ItemDetailView,
@@ -14,11 +15,13 @@ from inventory.views import (
     item_delete,
     item_host_lookup,
     item_install,
+    item_move_contents,
     item_merge,
     item_photo,
     item_reactivate,
     item_same_type,
     item_split,
+    item_store,
     loan_create,
     loan_return,
     location_add_place,
@@ -56,6 +59,9 @@ urlpatterns = [
     path("items/<int:pk>/edit/", ItemUpdateView.as_view(), name="item_edit"),
     path("items/<int:pk>/install/", item_install, name="item_install"),
     path("items/<int:pk>/split/", item_split, name="item_split"),
+    path("items/<int:pk>/store/", item_store, name="item_store"),
+    path("items/<int:pk>/move-contents/", item_move_contents, name="item_move_contents"),
+    path("containers/", ContainerListView.as_view(), name="containers"),
     path("items/<int:pk>/same-type/", item_same_type, name="item_same_type"),
     path("items/<int:pk>/merge/", item_merge, name="item_merge"),
     path("items/<int:pk>/deactivate/", item_deactivate, name="item_deactivate"),

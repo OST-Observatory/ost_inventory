@@ -3,12 +3,12 @@
 {% block title %}Stocktake — OST Inventory{% endblock %}
 {% block content %}
 <h1>Stocktake</h1>
-<p class="muted">Walk room to room, scan location QRs then item QRs. Not seen stays as the rolling “still here” list; a stocktake is a dated count.</p>
+<p class="muted">Walk room to room, scan location QRs then item QRs. Scanning a container's label counts the items inside it. Not seen stays as the rolling “still here” list; a stocktake is a dated count.</p>
 
 {% if open_stocktake %}
 <article class="block-card">
   <h2>Open stocktake</h2>
-  <p>Started {{ open_stocktake.started_at|naturaltime }}{% if open_stocktake.scope_location %} · {{ open_stocktake.scope_location.name }}{% else %} · whole inventory{% endif %}</p>
+  <p>Started {{ open_stocktake.started_at|naturaltime }} · {{ open_stocktake.scope_label }}</p>
   <p><a href="{% url 'inventory:stocktake_detail' open_stocktake.pk %}" role="button">Continue</a></p>
 </article>
 {% else %}
@@ -16,11 +16,20 @@
   {% csrf_token %}
   <label>
     <span>Scope</span>
-    <select name="scope_location">
+    <select name="scope">
       <option value="">Whole inventory</option>
-      {% for room in rooms %}
-        <option value="{{ room.pk }}">{{ room.name }}</option>
-      {% endfor %}
+      <optgroup label="Rooms">
+        {% for room in rooms %}
+          <option value="room:{{ room.pk }}">{{ room.name }}</option>
+        {% endfor %}
+      </optgroup>
+      {% if containers %}
+      <optgroup label="Containers">
+        {% for box in containers %}
+          <option value="container:{{ box.pk }}">{{ box.name }} ({{ box.inventory_number }})</option>
+        {% endfor %}
+      </optgroup>
+      {% endif %}
     </select>
   </label>
   <button type="submit">Start stocktake</button>
@@ -38,7 +47,7 @@
       {% for s in recent %}
       <tr>
         <td>{{ s.started_at|naturaltime }}</td>
-        <td>{% if s.scope_location %}{{ s.scope_location.name }}{% else %}Whole inventory{% endif %}</td>
+        <td>{{ s.scope_label }}</td>
         <td>{% if s.is_open %}<span class="chip chip-available">Open</span>{% else %}Finished{% endif %}</td>
         <td class="col-actions"><a href="{% url 'inventory:stocktake_detail' s.pk %}">Open</a></td>
       </tr>

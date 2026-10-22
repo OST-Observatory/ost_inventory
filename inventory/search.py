@@ -20,6 +20,7 @@ def _related_text_q(q):
         Exists(Category.objects.filter(items=OuterRef("pk"), name__icontains=q))
         | Exists(Project.objects.filter(pk=OuterRef("project_id"), name__icontains=q))
         | Exists(Item.objects.filter(pk=OuterRef("installed_in_id"), name__icontains=q))
+        | Exists(Item.objects.filter(pk=OuterRef("stored_in_id"), name__icontains=q))
     )
 
 
@@ -107,7 +108,10 @@ def filter_items(
         queryset = queryset.filter(project_id=project)
 
     if container:
-        queryset = queryset.filter(container=container)
+        from inventory.models import Item
+
+        box = Item.objects.filter(pk=container).first() if str(container).isdigit() else None
+        queryset = queryset.filter(pk__in=box.dependent_pks() if box else [])
 
     if on_loan:
         queryset = queryset.filter(

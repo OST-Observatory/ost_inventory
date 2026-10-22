@@ -58,6 +58,7 @@
               {% if can_write %}
                 <a href="{% url 'inventory:locations' %}" {% if current_url_name == "locations" or current_url_name == "location_detail" %}aria-current="page"{% endif %}>Locations</a>
               {% endif %}
+              <a href="{% url 'inventory:containers' %}" {% if current_url_name == "containers" %}aria-current="page"{% endif %}>Containers</a>
               <a href="{% url 'inventory:current_loans' %}" {% if current_url_name == "current_loans" %}aria-current="page"{% endif %}>
                 On loan
                 {% if overdue_loan_count %}<span class="badge-count">{{ overdue_loan_count }}</span>{% endif %}

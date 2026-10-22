@@ -66,21 +66,34 @@ def configure_room_place_fields(form, location=None):
             room.initial = location.pk
 
 
-def configure_installed_in_field(field, item=None, data=None, name="installed_in"):
-    """Validate against all legal hosts; render only empty + the current choice."""
-    host_qs = Item.objects.filter(is_active=True).order_by("name")
+def configure_item_picker_field(
+    field,
+    item=None,
+    data=None,
+    name="installed_in",
+    *,
+    attr="installed_in",
+    empty_label="Not mounted on another item",
+    containers_only=False,
+):
+    """Validate against all legal targets; render only empty + the current choice.
+
+    `attr` is the Item field the picker sets; the item itself and everything
+    mounted on or stored in it are excluded, so no loops can be chosen.
+    """
+    qs = Item.objects.filter(is_active=True)
+    if containers_only:
+        qs = qs.filter(is_container=True)
+    current_id = getattr(item, f"{attr}_id", None) if item else None
     if item and item.pk:
-        exclude_pks = [item.pk, *item.installed_part_pks()]
-        host_qs = host_qs.exclude(pk__in=exclude_pks)
-        if item.installed_in_id:
-            host_qs = Item.objects.filter(
-                Q(pk__in=host_qs.values("pk")) | Q(pk=item.installed_in_id)
-            ).order_by("name")
-    field.queryset = host_qs
+        qs = qs.exclude(pk__in=[item.pk, *item.dependent_pks()])
+        if current_id:
+            qs = Item.objects.filter(Q(pk__in=qs.values("pk")) | Q(pk=current_id))
+    field.queryset = qs.order_by("name")
     field.required = False
-    field.empty_label = "Not mounted on another item"
+    field.empty_label = empty_label
     field.label_from_instance = lambda obj: f"{obj.inventory_number} {obj.name}"
-    choices = [("", "Not mounted on another item")]
+    choices = [("", empty_label)]
     selected_pk = None
     if data is not None:
         raw = data.get(name)
@@ -89,13 +102,70 @@ def configure_installed_in_field(field, item=None, data=None, name="installed_in
                 selected_pk = int(raw)
             except (TypeError, ValueError):
                 selected_pk = None
-    elif item and item.installed_in_id:
-        selected_pk = item.installed_in_id
+    elif current_id:
+        selected_pk = current_id
     if selected_pk:
         host = Item.objects.filter(pk=selected_pk).first()
         if host:
             choices.append((str(host.pk), f"{host.inventory_number} {host.name}"))
     field.choices = choices
+
+
+def configure_installed_in_field(field, item=None, data=None, name="installed_in"):
+    configure_item_picker_field(field, item, data, name)
+
+
+def configure_stored_in_field(field, item=None, data=None, name="stored_in"):
+    configure_item_picker_field(
+        field,
+        item,
+        data,
+        name,
+        attr="stored_in",
+        empty_label="Not stored in a container",
+        containers_only=True,
+    )
+
+
+def _clean_new_container_name(value):
+    name = (value or "").strip()
+    reject_newlines(name, "Container name")
+    return name
+
+
+class StoredInForm(forms.Form):
+    stored_in = forms.ModelChoiceField(queryset=Item.objects.none(), required=False)
+    new_container_name = forms.CharField(required=False, max_length=200)
+
+    def __init__(self, *args, item=None, **kwargs):
+        kwargs.setdefault("prefix", "store")
+        super().__init__(*args, **kwargs)
+        configure_stored_in_field(
+            self.fields["stored_in"],
+            item,
+            self.data if self.is_bound else None,
+            name=self.add_prefix("stored_in"),
+        )
+
+    def clean_new_container_name(self):
+        return _clean_new_container_name(self.cleaned_data.get("new_container_name"))
+
+
+class MoveContentsForm(forms.Form):
+    into = forms.ModelChoiceField(queryset=Item.objects.none(), label="Move contents to")
+
+    def __init__(self, *args, item, **kwargs):
+        kwargs.setdefault("prefix", "move")
+        super().__init__(*args, **kwargs)
+        field = self.fields["into"]
+        configure_stored_in_field(
+            field,
+            item,
+            self.data if self.is_bound else {},
+            name=self.add_prefix("into"),
+        )
+        field.required = True
+        field.choices = [("", "Choose a container"), *list(field.choices)[1:]]
 
 
 class InstalledInForm(forms.Form):
@@ -193,6 +263,7 @@ class MergeItemForm(forms.Form):
 
 
 class ItemForm(forms.ModelForm):
+    new_container_name = forms.CharField(required=False, max_length=200)
     room = forms.ModelChoiceField(
         queryset=Location.objects.none(),
         label="Room",
@@ -248,8 +319,9 @@ class ItemForm(forms.ModelForm):
             "description",
             "quantity",
             "quantity_is_approximate",
-            "container",
+            "is_container",
             "installed_in",
+            "stored_in",
             "comment",
             "photo",
         ]
@@ -257,13 +329,6 @@ class ItemForm(forms.ModelForm):
             "quantity": forms.NumberInput(attrs={"min": 1, "required": True}),
             "description": forms.Textarea(attrs={"rows": 3}),
             "comment": forms.Textarea(attrs={"rows": 2}),
-            "container": forms.TextInput(
-                attrs={
-                    "list": "container-suggestions",
-                    "autocomplete": "off",
-                    "placeholder": "e.g. Crate 4, camera bag",
-                }
-            ),
             "photo": forms.ClearableFileInput(
                 attrs={"accept": "image/*", "capture": "environment"}
             ),
@@ -273,6 +338,7 @@ class ItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["quantity"].required = True
         self.fields["quantity_is_approximate"].label = "Approximate count"
+        self.fields["is_container"].label = "This item is a container (case, bag, box)"
         self.fields["photo"].widget.attrs.update(
             {
                 "data-photo-max-bytes": settings.PHOTO_MAX_BYTES,
@@ -286,6 +352,11 @@ class ItemForm(forms.ModelForm):
                 self.fields["project_name"].initial = self.instance.project.name
         configure_installed_in_field(
             self.fields["installed_in"],
+            self.instance if self.instance.pk else None,
+            self.data if self.is_bound else None,
+        )
+        configure_stored_in_field(
+            self.fields["stored_in"],
             self.instance if self.instance.pk else None,
             self.data if self.is_bound else None,
         )
@@ -311,10 +382,8 @@ class ItemForm(forms.ModelForm):
         reject_newlines(name, "Name")
         return name
 
-    def clean_container(self):
-        container = (self.cleaned_data.get("container") or "").strip()
-        reject_newlines(container, "Container")
-        return container
+    def clean_new_container_name(self):
+        return _clean_new_container_name(self.cleaned_data.get("new_container_name"))
 
     def clean_project_name(self):
         name = self.cleaned_data.get("project_name") or ""
@@ -338,11 +407,18 @@ class ItemForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         installed_in = cleaned.get("installed_in")
+        stored_in = cleaned.get("stored_in")
+        new_container = cleaned.get("new_container_name")
         room = cleaned.get("room")
         place = cleaned.get("place")
+        if installed_in and (stored_in or new_container):
+            self.add_error(
+                "stored_in",
+                "A mounted item is stored together with its host. Store the host instead.",
+            )
         if installed_in and self.instance.pk and installed_in.pk == self.instance.pk:
             self.add_error("installed_in", "An item cannot be mounted on itself.")
-        elif not installed_in and not room:
+        elif not installed_in and not stored_in and not room:
             self.add_error("room", "Select a room.")
         if place and room and place.parent_id != room.pk:
             self.add_error("place", "Place must belong to the selected room.")
@@ -385,8 +461,13 @@ class ItemForm(forms.ModelForm):
         item = super().save(commit=False)
         room = self.cleaned_data["room"]
         place = self.cleaned_data.get("place")
+        new_container = self.cleaned_data.get("new_container_name")
+        if commit and new_container and not item.installed_in_id and not item.stored_in_id:
+            item.stored_in = Item.create_container(new_container, place or room, item.updated_by)
         if item.installed_in_id:
             item.location = item.installed_in.location
+        elif item.stored_in_id:
+            item.location = item.stored_in.location
         else:
             item.location = place or room
         project_name = self.cleaned_data.get("project_name", "")

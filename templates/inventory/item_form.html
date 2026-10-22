@@ -82,20 +82,21 @@
         {{ form.place.errors }}
       </label>
     </div>
-    <p class="field-hint">Add rooms and places under <a href="{% url 'inventory:locations' %}">Tools → Locations</a>. Location follows the host if this item is mounted on another item.</p>
+    <p class="field-hint">Add rooms and places under <a href="{% url 'inventory:locations' %}">Tools → Locations</a>. Location follows the host or container if this item is mounted on another item or stored in a container.</p>
     <label for="{{ form.installed_in.id_for_label }}">Mounted on</label>
     {% include "inventory/partials/item_host_picker.html" with field=form.installed_in exclude_pk=form.instance.pk %}
     <p class="field-hint">Use when this item sits on another inventory item, e.g. a camera on a telescope.</p>
-    <label>
-      Container
-      {{ form.container }}
-      {{ form.container.errors }}
+    <label for="{{ form.stored_in.id_for_label }}">Stored in</label>
+    {% include "inventory/partials/item_host_picker.html" with field=form.stored_in exclude_pk=form.instance.pk kind="container" new_name_field=form.new_container_name search_label="Search container" %}
+    <p class="field-hint">The case, bag, or box this item is kept in; search, scan its label, or name a new one. A mounted item is stored together with its host.</p>
+    {% if form.instance.container %}
+    <p class="field-hint">Old container note: “{{ form.instance.container }}” (to be migrated).</p>
+    {% endif %}
+    <label class="checkbox">
+      {{ form.is_container }}
+      {{ form.is_container.label }}
     </label>
-    <datalist id="container-suggestions">
-      {% for c in containers %}
-        <option value="{{ c }}">
-      {% endfor %}
-    </datalist>
+    {{ form.is_container.errors }}
   </section>
 
   <section class="form-section">

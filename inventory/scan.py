@@ -51,6 +51,7 @@ def _item_payload(user, pk: int) -> dict | None:
     return {
         "kind": "item",
         "id": item.pk,
+        "is_container": item.is_container,
         "label": f"{item.inventory_number} {item.name}",
         "url": reverse("inventory:item_detail", args=[item.pk]),
         "short_url": reverse("item_short", args=[item.pk]),

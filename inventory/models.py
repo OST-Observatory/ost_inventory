@@ -13,6 +13,7 @@ from inventory.images import item_photo_upload_to
 from inventory.validators import reject_newlines, validate_optional_email_or_text
 
 MAX_CATEGORIES = 4
+CONTAINER_CATEGORY = "Container"
 
 
 class Location(models.Model):
@@ -156,7 +157,20 @@ class Item(models.Model):
     container = models.CharField(
         max_length=120,
         blank=True,
-        help_text="Box, crate, or bag this item is stored in.",
+        help_text="Legacy free-text container; replaced by stored_in (see container_plan).",
+    )
+    is_container = models.BooleanField(
+        default=False,
+        help_text="Other items can be stored in this one (case, bag, box).",
+    )
+    stored_in = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="contents",
+        verbose_name="stored in",
+        help_text="Container item this one is stored in.",
     )
     installed_in = models.ForeignKey(
         "self",
@@ -197,6 +211,7 @@ class Item(models.Model):
             models.Index(fields=["project"]),
             models.Index(fields=["installed_in"]),
             models.Index(fields=["unit_group"]),
+            models.Index(fields=["stored_in"]),
         ]
 
     def __str__(self):
@@ -232,41 +247,93 @@ class Item(models.Model):
             return None
         return cls.objects.filter(pk=int(text)).first()
 
-    def installed_part_pks(self):
+    @property
+    def parent_id(self):
+        """The item this one follows: its host if mounted, else its container."""
+        return self.installed_in_id or self.stored_in_id
+
+    @classmethod
+    def create_container(cls, name, location, user):
+        """New container item, filed under the "Container" category."""
+        container = cls.objects.create(
+            name=name,
+            is_container=True,
+            location=location,
+            created_by=user,
+            updated_by=user,
+        )
+        category, _ = Category.get_or_create_by_name(CONTAINER_CATEGORY)
+        container.categories.add(category)
+        return container
+
+    def dependent_pks(self):
+        """Items mounted on or stored in this one, directly or further down."""
         pks = []
-        queue = deque(self.installed_parts.values_list("pk", flat=True))
+        items = type(self).objects
+        queue = deque([self.pk])
         while queue:
-            pk = queue.popleft()
-            pks.append(pk)
-            queue.extend(
-                type(self).objects.filter(installed_in_id=pk).values_list("pk", flat=True)
-            )
+            current = queue.popleft()
+            children = items.filter(
+                Q(installed_in_id=current) | Q(stored_in_id=current)
+            ).values_list("pk", flat=True)
+            for pk in children:
+                if pk not in pks and pk != self.pk:
+                    pks.append(pk)
+                    queue.append(pk)
         return pks
+
+    @property
+    def effective_container(self):
+        """The container this item is in, directly or through its host."""
+        node = self
+        seen = set()
+        while node is not None and node.pk not in seen:
+            seen.add(node.pk)
+            if node.stored_in_id:
+                return node.stored_in
+            node = node.installed_in
+        return None
 
     def clean(self):
         super().clean()
         reject_newlines(self.name, "Name")
         reject_newlines(self.container, "Container")
-        if not self.installed_in_id:
-            return
-        if self.pk and self.installed_in_id == self.pk:
+        if self.installed_in_id and self.stored_in_id:
             raise ValidationError(
-                {"installed_in": "An item cannot be mounted on itself."}
+                {
+                    "stored_in": "Store the host instead: a mounted item is stored "
+                    "together with the item it is mounted on."
+                }
             )
-        host_id = self.installed_in_id
+        if self.stored_in_id:
+            container = type(self).objects.filter(pk=self.stored_in_id).first()
+            if container is None or not container.is_container:
+                raise ValidationError({"stored_in": "Choose an item marked as a container."})
+        if not self.is_container and self.pk and self.contents.exists():
+            raise ValidationError(
+                {"is_container": "Move the stored items out before unmarking this container."}
+            )
+        field = "installed_in" if self.installed_in_id else "stored_in"
+        parent_id = self.parent_id
+        if not parent_id:
+            return
+        if self.pk and parent_id == self.pk:
+            raise ValidationError({field: "An item cannot be mounted on or stored in itself."})
         seen = {self.pk} if self.pk else set()
-        while host_id:
-            if host_id in seen:
+        while parent_id:
+            if parent_id in seen:
                 raise ValidationError(
-                    {"installed_in": "That would create a loop of mounted items."}
+                    {field: "That would create a loop of mounted or stored items."}
                 )
-            seen.add(host_id)
-            host_id = (
+            seen.add(parent_id)
+            host, container = (
                 type(self)
-                .objects.filter(pk=host_id)
-                .values_list("installed_in_id", flat=True)
+                .objects.filter(pk=parent_id)
+                .values_list("installed_in_id", "stored_in_id")
                 .first()
+                or (None, None)
             )
+            parent_id = host or container
 
     def save(self, *args, **kwargs):
         update_fields = kwargs.get("update_fields")
@@ -278,24 +345,23 @@ class Item(models.Model):
                 .values_list("location_id", flat=True)
                 .first()
             )
-        if update_fields is None and self.installed_in_id:
-            host_location_id = (
+        if update_fields is None and self.parent_id:
+            parent_location_id = (
                 type(self)
-                .objects.filter(pk=self.installed_in_id)
+                .objects.filter(pk=self.parent_id)
                 .values_list("location_id", flat=True)
                 .first()
             )
-            if host_location_id:
-                self.location_id = host_location_id
+            if parent_location_id:
+                self.location_id = parent_location_id
         super().save(*args, **kwargs)
         if previous_location_id and previous_location_id != self.location_id:
-            self._cascade_location_to_installed_parts()
+            self._cascade_location_to_dependents()
 
-    def _cascade_location_to_installed_parts(self):
-        for pk in self.installed_part_pks():
-            type(self).objects.filter(pk=pk).exclude(location_id=self.location_id).update(
-                location_id=self.location_id
-            )
+    def _cascade_location_to_dependents(self):
+        type(self).objects.filter(pk__in=self.dependent_pks()).exclude(
+            location_id=self.location_id
+        ).update(location_id=self.location_id)
 
     def mark_seen(self):
         self.last_seen_at = timezone.now()
@@ -391,6 +457,8 @@ class Item(models.Model):
             raise ValidationError("Return the loan before merging.")
         if self.installed_parts.filter(is_active=True).exists():
             raise ValidationError("Unmount the items mounted on this one first.")
+        if self.contents.filter(is_active=True).exists():
+            raise ValidationError("Move the items stored in this one out first.")
         target.quantity += self.quantity
         target.updated_by = user
         target.save(update_fields=["quantity", "updated_by", "updated_at"])
@@ -469,12 +537,36 @@ class Stocktake(models.Model):
         on_delete=models.SET_NULL,
         related_name="stocktakes_current",
     )
+    scope_container = models.ForeignKey(
+        "Item",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stocktakes_scoped",
+        help_text="If set, only items stored in this container are expected.",
+    )
+    current_container = models.ForeignKey(
+        "Item",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stocktakes_current",
+    )
 
     class Meta:
         ordering = ["-started_at"]
 
     def __str__(self):
         return f"Stocktake {self.pk}"
+
+    @property
+    def scope_label(self) -> str:
+        if self.scope_container_id:
+            box = self.scope_container
+            return f"{box.inventory_number} {box.name}"
+        if self.scope_location_id:
+            return self.scope_location.name
+        return "Whole inventory"
 
     @property
     def is_open(self) -> bool:
@@ -501,6 +593,20 @@ class StocktakeScan(models.Model):
         related_name="stocktake_found",
     )
 
+    expected_container = models.ForeignKey(
+        Item,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stocktake_expected_in",
+    )
+    found_container = models.ForeignKey(
+        Item,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stocktake_found_in",
+    )
     expected_quantity = models.PositiveIntegerField(null=True, blank=True)
     counted_quantity = models.PositiveIntegerField(null=True, blank=True)
 
@@ -515,6 +621,13 @@ class StocktakeScan(models.Model):
 
     def __str__(self):
         return f"{self.item} in stocktake {self.stocktake_id}"
+
+    @property
+    def found_where_expected(self) -> bool:
+        """Inside a container, compare containers; otherwise compare places."""
+        if self.found_container_id:
+            return self.found_container_id == self.expected_container_id
+        return self.found_location_id == self.expected_location_id
 
     @property
     def needs_count(self) -> bool:
