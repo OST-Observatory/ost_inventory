@@ -432,6 +432,115 @@ h2 { margin-top: 0; }
   border-color: var(--ost-accent);
   box-shadow: none;
 }
+.action-bar :is(button, a[role="button"]).is-primary,
+.action-bar :is(button, a[role="button"]).is-primary:is(:hover, :focus) {
+  color: #fff;
+  background: var(--ost-accent);
+  border-color: var(--ost-accent);
+}
+.action-bar :is(button, a[role="button"]).is-primary:hover { background: var(--ost-accent-hover); }
+
+/* "More ▾": rarely used actions of a page, grouped in a dropdown. */
+.action-menu {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.action-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.15rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 550;
+  line-height: 1.2;
+  color: var(--ost-ink);
+  background: var(--ost-surface);
+  border: 1px solid var(--ost-line);
+  border-radius: 0.35rem;
+  list-style: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.action-menu > summary::-webkit-details-marker { display: none; }
+.action-menu > summary::after { display: none; }
+.action-menu > summary:hover,
+.action-menu[open] > summary {
+  margin-bottom: 0;
+  background: var(--ost-bg);
+  border-color: var(--ost-accent);
+}
+.action-bar a[role="button"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.action-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 13rem;
+  padding: 0.35rem;
+  background: var(--ost-surface);
+  border: 1px solid var(--ost-line);
+  border-radius: 0.45rem;
+  box-shadow: 0 8px 24px rgba(18, 24, 38, 0.18);
+}
+.action-menu-panel form { margin: 0; }
+.action-bar .action-menu-panel button,
+.action-bar .action-menu-panel button:is(:hover, :focus) {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  font-weight: 500;
+  background: none;
+  border: 0;
+  border-radius: 0.3rem;
+}
+.action-bar .action-menu-panel button:is(:hover, :focus-visible) { background: var(--ost-bg); }
+.action-bar .action-menu-panel button.is-danger { color: var(--overdue); }
+[data-theme="dark"] .action-bar .action-menu-panel button.is-danger { color: #f19a9a; }
+.action-menu-label {
+  margin: 0.4rem 0.65rem 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ost-muted);
+}
+.action-menu-label:first-child { margin-top: 0.15rem; }
+.action-menu-panel hr { margin: 0.35rem 0.3rem; border-color: var(--ost-line); }
+
+.label-narrow { display: none; }
+
+/* On phones: the main action across the full width, the others in one even row. */
+@media (max-width: 39.99rem) {
+  .action-bar.item-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .item-actions > :first-child { grid-column: 1 / -1; }
+  .item-actions > :first-child > button { min-height: 2.75rem; font-size: 1rem; }
+  .item-actions .label-wide { display: none; }
+  .item-actions .label-narrow { display: inline; }
+  .item-actions .action-menu-panel { text-align: left; }
+  .item-actions > form,
+  .item-actions > .action-menu,
+  .item-actions > form > :is(button, .photo-capture),
+  .item-actions > :is(button, a[role="button"]),
+  .item-actions > .action-menu > summary {
+    width: 100%;
+    text-align: center;
+  }
+}
+
 .action-bar .photo-capture {
   position: relative;
   display: inline-flex;
@@ -860,6 +969,36 @@ body > footer.site-footer {
 .label-toolbar { margin-bottom: 0.6rem; }
 .label-list { max-height: 22rem; overflow: auto; padding-right: 0.25rem; }
 .label-count { font-weight: 650; }
+
+.qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+}
+.qty-stepper button {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+.qty-stepper input[type="number"] {
+  width: 4.5rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0.2rem 0.4rem;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.qty-stepper input[type="number"]::-webkit-inner-spin-button,
+.qty-stepper input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+.item-facts { align-items: baseline; }
 
 .status-cell { display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start; }
 .still-here-mini { font-size: 0.8rem; padding: 0.2rem 0.45rem; }

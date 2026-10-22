@@ -7,6 +7,7 @@ from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
 from accounts.permissions import (
@@ -525,6 +526,31 @@ def still_here(request, pk):
         messages.success(request, "Marked as still here.")
     if hx:
         return render(request, "inventory/partials/still_here_ok.html", {"item": item})
+    return redirect("inventory:item_detail", pk=pk)
+
+
+MAX_QUANTITY = 1_000_000
+
+
+@write_required
+@require_POST
+def item_quantity(request, pk):
+    """Quick quantity change from the item page: -1, +1, or a typed number."""
+    item = get_object_or_404(Item, pk=pk, is_active=True)
+    raw = (request.POST.get("quantity") or "").strip()
+    quantity = int(raw) if raw.isdigit() else item.quantity
+    op = request.POST.get("op")
+    if op == "minus":
+        quantity -= 1
+    elif op == "plus":
+        quantity += 1
+    quantity = min(max(quantity, 1), MAX_QUANTITY)
+    if quantity != item.quantity:
+        item.quantity = quantity
+        item.updated_by = request.user
+        item.save(update_fields=["quantity", "updated_by", "updated_at"])
+        if not request.headers.get("HX-Request"):
+            messages.success(request, f"Quantity set to {item.quantity_display}.")
     return redirect("inventory:item_detail", pk=pk)
 
 

@@ -704,6 +704,31 @@ function bindManualScan() {
   });
 }
 
+// "More" menus (<details class="action-menu">): close on an outside click,
+// after an action was chosen, and with Escape.
+function bindActionMenus() {
+  function closeAll(except) {
+    document.querySelectorAll("details.action-menu[open]").forEach(function (menu) {
+      if (menu !== except) {
+        menu.removeAttribute("open");
+      }
+    });
+  }
+  document.addEventListener("click", function (event) {
+    var menu = event.target.closest("details.action-menu");
+    if (menu && event.target.closest(".action-menu-panel button")) {
+      menu.removeAttribute("open");
+      return;
+    }
+    closeAll(menu);
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      closeAll(null);
+    }
+  });
+}
+
 function bindDialogs() {
   document.addEventListener("click", function (event) {
     var openBtn = event.target.closest("[data-dialog-open]");
@@ -1248,6 +1273,7 @@ function bindUi() {
   bindSharePng();
   bindLabelScanners();
   bindManualScan();
+  bindActionMenus();
   bindDialogs();
   bindPhotoCapture();
 }

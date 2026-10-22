@@ -1420,3 +1420,64 @@ class PhotoReductionTests(TestCase):
         edit = self.client.get(reverse("inventory:item_edit", args=[self.item.pk]))
         self.assertContains(edit, 'data-photo-max-bytes="5242880"')
         self.assertContains(edit, "are reduced before upload")
+
+
+class ItemPageLayoutTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="writer", password="x", is_supervisor=True
+        )
+        self.item = Item.objects.create(
+            name="M4 screws",
+            quantity=5,
+            location=Location.objects.create(name="Lab"),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client = Client()
+        self.client.login(username="writer", password="x")
+        self.url = reverse("inventory:item_quantity", args=[self.item.pk])
+
+    def _quantity(self):
+        self.item.refresh_from_db()
+        return self.item.quantity
+
+    def test_quick_quantity_steps_and_typed_value(self):
+        self.client.post(self.url, {"op": "plus", "quantity": "5"})
+        self.assertEqual(self._quantity(), 6)
+        self.client.post(self.url, {"op": "minus", "quantity": "6"})
+        self.assertEqual(self._quantity(), 5)
+        # Enter in the number field submits the first ("set") button.
+        self.client.post(self.url, {"op": "set", "quantity": "12"})
+        self.assertEqual(self._quantity(), 12)
+        self.client.post(self.url, {"op": "plus", "quantity": "20"})
+        self.assertEqual(self._quantity(), 21)
+
+    def test_quick_quantity_never_drops_below_one(self):
+        self.client.post(self.url, {"op": "set", "quantity": "1"})
+        self.client.post(self.url, {"op": "minus", "quantity": "1"})
+        self.assertEqual(self._quantity(), 1)
+        self.client.post(self.url, {"op": "set", "quantity": "abc"})
+        self.assertEqual(self._quantity(), 1)
+
+    def test_htmx_request_gets_the_page_without_flash_message(self):
+        resp = self.client.post(self.url, {"op": "plus", "quantity": "5"}, HTTP_HX_REQUEST="true", follow=True)
+        self.assertContains(resp, 'id="quantity-cell"')
+        self.assertNotContains(resp, "Quantity set to")
+
+    def test_reader_cannot_change_quantity(self):
+        User.objects.create_user(username="reader", password="x", is_student=True)
+        self.client.login(username="reader", password="x")
+        self.assertEqual(self.client.post(self.url, {"op": "plus"}).status_code, 403)
+        self.assertEqual(self._quantity(), 5)
+        page = self.client.get(reverse("inventory:item_detail", args=[self.item.pk]))
+        self.assertNotContains(page, "qty-stepper")
+
+    def test_detail_hides_empty_fields_and_groups_actions(self):
+        page = self.client.get(reverse("inventory:item_detail", args=[self.item.pk]))
+        self.assertContains(page, "qty-stepper")
+        self.assertContains(page, "action-menu")
+        self.assertContains(page, "Same type as…")
+        for empty in ("<dt>Mounted on</dt>", "<dt>Stored in</dt>", "<dt>Same type</dt>", "<dt>Project</dt>", "<dt>Comment</dt>"):
+            self.assertNotContains(page, empty)
+        self.assertNotContains(page, "Link…")

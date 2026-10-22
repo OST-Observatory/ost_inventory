@@ -17,7 +17,15 @@
   </header>
 
   {% if can_write or can_labels %}
-  <div class="action-bar">
+  <div class="action-bar item-actions">
+    {% if can_write and item.is_lent %}
+      {% with loan=item.current_loan %}
+      <form method="post" action="{% url 'inventory:loan_return' loan.pk %}" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="is-primary">Return</button>
+      </form>
+      {% endwith %}
+    {% endif %}
     {% if can_write %}
     <form method="post" action="{% url 'inventory:still_here' item.pk %}" class="inline"
           hx-post="{% url 'inventory:still_here' item.pk %}"
@@ -25,8 +33,9 @@
           hx-select="#last-seen"
           hx-swap="outerHTML">
       {% csrf_token %}
-      <button type="submit">Still here</button>
+      <button type="submit"{% if not item.is_lent %} class="is-primary"{% endif %}>Still here</button>
     </form>
+    <a href="{% url 'inventory:item_edit' item.pk %}" role="button">Edit</a>
     <form method="post" action="{% url 'inventory:item_photo' item.pk %}" enctype="multipart/form-data"
           class="inline js-photo-capture"
           {% if item.photo %}data-confirm="Replace the current photo?"{% endif %}>
@@ -35,7 +44,7 @@
         <input type="file" name="photo" accept="image/*" capture="environment"
                data-photo-max-bytes="{{ photo_max_bytes }}" data-photo-max-dim="{{ photo_max_dimension }}"
                aria-label="{% if item.photo %}Replace photo{% else %}Take photo{% endif %}">
-        {% if item.photo %}Replace photo{% else %}Take photo{% endif %}
+        <span class="label-wide">{% if item.photo %}New photo{% else %}Take photo{% endif %}</span><span class="label-narrow">Photo</span>
       </label>
       <noscript>
         <button type="submit">Save photo</button>
@@ -43,45 +52,47 @@
     </form>
     {% endif %}
     {% if can_labels and item.is_active %}
-    <button type="button" data-dialog-open="qr-label-dialog">Print label</button>
+    <button type="button" data-dialog-open="qr-label-dialog"><span class="label-wide">Print label</span><span class="label-narrow">Label</span></button>
     {% endif %}
     {% if can_write %}
-    {% if item.is_lent %}
-      {% with loan=item.current_loan %}
-      <form method="post" action="{% url 'inventory:loan_return' loan.pk %}" class="inline">
-        {% csrf_token %}
-        <button type="submit">Return</button>
-      </form>
-      {% endwith %}
-    {% endif %}
-    <a href="{% url 'inventory:item_edit' item.pk %}" role="button">Edit</a>
-    <button type="button" data-dialog-open="install-in-dialog">Mount on…</button>
-    <button type="button" data-dialog-open="store-in-dialog">Store in…</button>
-    {% if item.is_active and item.quantity > 1 and not item.is_lent %}
-    <button type="button" data-dialog-open="split-dialog">Split off…</button>
-    {% endif %}
-    {% if item.is_active and can_merge %}
-    <button type="button" data-dialog-open="merge-dialog">Merge back…</button>
-    {% endif %}
-    {% if item.is_active %}
-      <form method="post" action="{% url 'inventory:item_deactivate' item.pk %}" class="inline js-confirm"
-            data-confirm="Deactivate this item?">
-        {% csrf_token %}
-        <button type="submit">Deactivate</button>
-      </form>
-    {% else %}
-      <form method="post" action="{% url 'inventory:item_reactivate' item.pk %}" class="inline">
-        {% csrf_token %}
-        <button type="submit">Reactivate</button>
-      </form>
-    {% endif %}
-    {% if can_delete %}
-      <form method="post" action="{% url 'inventory:item_delete' item.pk %}" class="inline js-confirm"
-            data-confirm="Permanently delete? This cannot be undone.">
-        {% csrf_token %}
-        <button type="submit">Delete</button>
-      </form>
-    {% endif %}
+    <details class="action-menu">
+      <summary>More ▾</summary>
+      <div class="action-menu-panel">
+        <p class="action-menu-label">Place</p>
+        <button type="button" data-dialog-open="install-in-dialog">Mount on…</button>
+        <button type="button" data-dialog-open="store-in-dialog">Store in…</button>
+        {% if item.is_active %}
+        <p class="action-menu-label">Units</p>
+        {% if item.quantity > 1 and not item.is_lent %}
+        <button type="button" data-dialog-open="split-dialog">Split off…</button>
+        {% endif %}
+        {% if can_merge %}
+        <button type="button" data-dialog-open="merge-dialog">Merge back…</button>
+        {% endif %}
+        <button type="button" data-dialog-open="same-type-dialog">Same type as…</button>
+        {% endif %}
+        <hr>
+        {% if item.is_active %}
+        <form method="post" action="{% url 'inventory:item_deactivate' item.pk %}" class="js-confirm"
+              data-confirm="Deactivate this item?">
+          {% csrf_token %}
+          <button type="submit" class="is-danger">Deactivate</button>
+        </form>
+        {% else %}
+        <form method="post" action="{% url 'inventory:item_reactivate' item.pk %}">
+          {% csrf_token %}
+          <button type="submit">Reactivate</button>
+        </form>
+        {% endif %}
+        {% if can_delete %}
+        <form method="post" action="{% url 'inventory:item_delete' item.pk %}" class="js-confirm"
+              data-confirm="Permanently delete? This cannot be undone.">
+          {% csrf_token %}
+          <button type="submit" class="is-danger">Delete</button>
+        </form>
+        {% endif %}
+      </div>
+    </details>
     {% endif %}
   </div>
   {% endif %}
@@ -93,15 +104,13 @@
     </div>
     {% endif %}
     <div>
-      <dl>
+      <dl class="item-facts">
         <dt>Location</dt>
         <dd><a href="{% url 'inventory:location_detail' item.location_id %}">{{ item.location.path_display }}</a></dd>
+        {% if item.installed_in %}
         <dt>Mounted on</dt>
-        <dd>
-          {% if item.installed_in %}
-            <a href="{% url 'inventory:item_detail' item.installed_in_id %}">{{ item.installed_in.inventory_number }} {{ item.installed_in.name }}</a>
-          {% else %}—{% endif %}
-        </dd>
+        <dd><a href="{% url 'inventory:item_detail' item.installed_in_id %}">{{ item.installed_in.inventory_number }} {{ item.installed_in.name }}</a></dd>
+        {% endif %}
         {% with parts=item.installed_parts.all %}
         {% if parts %}
         <dt>Mounted here</dt>
@@ -112,16 +121,36 @@
         </dd>
         {% endif %}
         {% endwith %}
+        {% with box=item.effective_container %}
+        {% if box %}
         <dt>Stored in</dt>
         <dd>
-          {% with box=item.effective_container %}
-          {% if box %}
-            <a href="{% url 'inventory:item_detail' box.pk %}">{{ box.inventory_number }} {{ box.name }}</a>
-            {% if not item.stored_in_id %}<span class="muted">(with {{ item.installed_in.inventory_number }} {{ item.installed_in.name }})</span>{% endif %}
-          {% else %}—{% endif %}
-          {% endwith %}
+          <a href="{% url 'inventory:item_detail' box.pk %}">{{ box.inventory_number }} {{ box.name }}</a>
+          {% if not item.stored_in_id %}<span class="muted">(with {{ item.installed_in.inventory_number }} {{ item.installed_in.name }})</span>{% endif %}
         </dd>
-        <dt>Quantity</dt><dd>{{ item.quantity_display }}</dd>
+        {% endif %}
+        {% endwith %}
+        <dt>Quantity</dt>
+        <dd id="quantity-cell">
+          {% if can_write and item.is_active %}
+          <form method="post" action="{% url 'inventory:item_quantity' item.pk %}" class="qty-stepper"
+                hx-post="{% url 'inventory:item_quantity' item.pk %}"
+                hx-target="#quantity-cell"
+                hx-select="#quantity-cell"
+                hx-swap="outerHTML">
+            {% csrf_token %}
+            {# First submit button = what Enter in the number field triggers. #}
+            <button type="submit" name="op" value="set" class="visually-hidden" tabindex="-1">Save quantity</button>
+            <button type="submit" name="op" value="minus" class="outline secondary" aria-label="One less"{% if item.quantity <= 1 %} disabled{% endif %}>−</button>
+            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" inputmode="numeric" aria-label="Quantity">
+            <button type="submit" name="op" value="plus" class="outline secondary" aria-label="One more">+</button>
+            {% if item.quantity_is_approximate %}<span class="muted">approx.</span>{% endif %}
+          </form>
+          {% else %}
+          {{ item.quantity_display }}
+          {% endif %}
+        </dd>
+        {% if same_type_items %}
         <dt>Same type</dt>
         <dd>
           {% for other in same_type_items %}
@@ -132,19 +161,14 @@
             {% if other.installed_in %}mounted on {{ other.installed_in.inventory_number }} {{ other.installed_in.name }}{% else %}{{ other.location.path_display }}{% endif %}
           </div>
           {% endfor %}
-          <div>
-            {% if same_type_items %}<span class="muted">{% if same_type_approx %}About {% endif %}{{ same_type_total }} units in total</span>{% else %}—{% endif %}
-            {% if can_write and item.is_active %}
-            <span class="muted">·</span>
-            <button type="button" class="inline-action" data-dialog-open="same-type-dialog">{% if same_type_items %}Edit…{% else %}Link…{% endif %}</button>
-            {% endif %}
-          </div>
+          <div class="muted">{% if same_type_approx %}About {% endif %}{{ same_type_total }} units in total</div>
         </dd>
+        {% endif %}
         <dt>Categories</dt>
         <dd>{% for c in item.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
-        <dt>Project</dt><dd>{% if item.project %}{{ item.project.name }}{% else %}—{% endif %}</dd>
-        <dt>Description</dt><dd>{{ item.description|linebreaksbr|default:"—" }}</dd>
-        <dt>Comment</dt><dd>{{ item.comment|linebreaksbr|default:"—" }}</dd>
+        {% if item.project %}<dt>Project</dt><dd>{{ item.project.name }}</dd>{% endif %}
+        {% if item.description %}<dt>Description</dt><dd>{{ item.description|linebreaksbr }}</dd>{% endif %}
+        {% if item.comment %}<dt>Comment</dt><dd>{{ item.comment|linebreaksbr }}</dd>{% endif %}
         <dt>Last seen</dt>
         <dd><time id="last-seen" datetime="{{ item.last_seen_at|date:'c' }}">{% if item.last_seen_at %}{{ item.last_seen_at|naturaltime }}{% else %}Never{% endif %}</time></dd>
         <dt>Updated</dt><dd>{{ item.updated_at|naturaltime }} by {{ item.updated_by }}</dd>
