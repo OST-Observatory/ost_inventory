@@ -167,8 +167,7 @@
         <dt>Categories</dt>
         <dd>{% for c in item.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
         {% if item.project %}<dt>Project</dt><dd>{{ item.project.name }}</dd>{% endif %}
-        {% if item.description %}<dt>Description</dt><dd>{{ item.description|linebreaksbr }}</dd>{% endif %}
-        {% if item.comment %}<dt>Comment</dt><dd>{{ item.comment|linebreaksbr }}</dd>{% endif %}
+        {% if item.notes %}<dt>Notes</dt><dd>{{ item.notes|linebreaksbr }}</dd>{% endif %}
         <dt>Last seen</dt>
         <dd><time id="last-seen" datetime="{{ item.last_seen_at|date:'c' }}">{% if item.last_seen_at %}{{ item.last_seen_at|naturaltime }}{% else %}Never{% endif %}</time></dd>
         <dt>Updated</dt><dd>{{ item.updated_at|naturaltime }} by {{ item.updated_by }}</dd>

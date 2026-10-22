@@ -99,3 +99,22 @@ class ImportCommandTests(TransactionTestCase):
             self.assertFalse(Item.objects.filter(name="Slit").exists())
         finally:
             Path(path).unlink(missing_ok=True)
+
+    def test_old_description_and_comment_columns_become_notes(self):
+        csv_body = (
+            "name,location_path,categories,description,comment\n"
+            "Lens,Lab,Optics,50 mm f/1.8,Scratch on the front element\n"
+            "Cap,Lab,Optics,,Only a comment\n"
+        )
+        with NamedTemporaryFile("w", suffix=".csv", delete=False) as fh:
+            fh.write(csv_body)
+            path = fh.name
+        try:
+            call_command("import_inventory", file=path, stdout=StringIO())
+            self.assertEqual(
+                Item.objects.get(name="Lens").notes,
+                "50 mm f/1.8\n\nScratch on the front element",
+            )
+            self.assertEqual(Item.objects.get(name="Cap").notes, "Only a comment")
+        finally:
+            Path(path).unlink(missing_ok=True)

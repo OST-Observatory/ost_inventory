@@ -58,8 +58,7 @@ def filter_items(
             # rank/similarity differ per row.
             vector = (
                 SearchVector("name", weight="A")
-                + SearchVector("description", weight="B")
-                + SearchVector("comment", weight="C")
+                + SearchVector("notes", weight="B")
             )
             query = SearchQuery(q)
             queryset = (
@@ -72,8 +71,7 @@ def filter_items(
                     Q(search=query)
                     | Q(sim__gt=0.2)
                     | Q(name__icontains=q)
-                    | Q(description__icontains=q)
-                    | Q(comment__icontains=q)
+                    | Q(notes__icontains=q)
                     | related
                     | by_number
                 )
@@ -82,8 +80,7 @@ def filter_items(
         else:
             queryset = queryset.filter(
                 Q(name__icontains=q)
-                | Q(description__icontains=q)
-                | Q(comment__icontains=q)
+                | Q(notes__icontains=q)
                 | related
                 | by_number
             ).order_by("name", "pk")

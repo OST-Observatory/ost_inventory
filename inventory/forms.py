@@ -316,19 +316,19 @@ class ItemForm(forms.ModelForm):
         model = Item
         fields = [
             "name",
-            "description",
+            "notes",
             "quantity",
             "quantity_is_approximate",
             "is_container",
             "installed_in",
             "stored_in",
-            "comment",
             "photo",
         ]
         widgets = {
             "quantity": forms.NumberInput(attrs={"min": 1, "required": True}),
-            "description": forms.Textarea(attrs={"rows": 3}),
-            "comment": forms.Textarea(attrs={"rows": 2}),
+            "notes": forms.Textarea(
+                attrs={"rows": 4, "placeholder": "What it is, what belongs to it, known issues…"}
+            ),
             "photo": forms.ClearableFileInput(
                 attrs={"accept": "image/*", "capture": "environment"}
             ),

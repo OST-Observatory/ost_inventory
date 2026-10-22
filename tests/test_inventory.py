@@ -982,7 +982,7 @@ class SplitOffTests(TestCase):
         )
         self.cables = Item.objects.create(
             name="BNC cable",
-            description="1 m, 50 ohm",
+            notes="1 m, 50 ohm",
             quantity=5,
             stored_in=self.crate,
             location=self.shelf,
@@ -1018,10 +1018,10 @@ class SplitOffTests(TestCase):
         self.assertEqual(self.cables.quantity, 3)
         self.assertEqual(part.quantity, 2)
         self.assertEqual(part.name, "BNC cable")
-        self.assertEqual(part.description, "1 m, 50 ohm")
+        self.assertTrue(part.notes.startswith("1 m, 50 ohm\n\n"))
         self.assertEqual(part.location_id, self.dome.pk)
         self.assertIsNone(part.stored_in_id)
-        self.assertIn(self.cables.inventory_number, part.comment)
+        self.assertIn(f"Split off from {self.cables.inventory_number}.", part.notes)
         self.assertEqual([c.name for c in part.categories.all()], ["Cables"])
 
     def test_split_and_mount_one_unit(self):
@@ -1300,7 +1300,7 @@ class SameTypeTests(TestCase):
         self.assertEqual(self.stock.quantity, 4)
         self.assertFalse(part.is_active)
         self.assertIsNone(part.installed_in_id)
-        self.assertIn(f"Merged into {self.stock.inventory_number}.", part.comment)
+        self.assertIn(f"Merged into {self.stock.inventory_number}.", part.notes)
         detail = self.client.get(reverse("inventory:item_detail", args=[self.stock.pk]))
         self.assertNotContains(detail, "Merge back…")
         self.assertNotContains(detail, "units in total")

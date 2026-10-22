@@ -34,6 +34,16 @@ def _item_ref(row, column):
     return None, False, f"{column} item {raw} was not found"
 
 
+def _notes_from_row(row):
+    """The notes column, or older exports' description and comment joined; None if absent."""
+    if "notes" in row:
+        return row.get("notes", "")
+    if "description" not in row and "comment" not in row:
+        return None
+    parts = (row.get("description", "").strip(), row.get("comment", "").strip())
+    return "\n\n".join(p for p in parts if p)
+
+
 def _flatten_validation(exc: ValidationError):
     if hasattr(exc, "message_dict"):
         messages = []
@@ -184,13 +194,14 @@ def import_rows(rows, *, user, dry_run=True):
                 continue
 
             if existing:
-                existing.description = row.get("description", existing.description)
+                notes = _notes_from_row(row)
+                if notes is not None:
+                    existing.notes = notes
                 existing.quantity = quantity
                 if "project" in row:
                     existing.project = project
                 if quantity_is_approximate is not None:
                     existing.quantity_is_approximate = quantity_is_approximate
-                existing.comment = row.get("comment", existing.comment)
                 existing.updated_by = user
                 if host:
                     existing.installed_in = host
@@ -221,7 +232,7 @@ def import_rows(rows, *, user, dry_run=True):
             else:
                 item = Item(
                     name=name,
-                    description=row.get("description", ""),
+                    notes=_notes_from_row(row) or "",
                     quantity=quantity,
                     quantity_is_approximate=bool(quantity_is_approximate),
                     project=project,
@@ -229,7 +240,6 @@ def import_rows(rows, *, user, dry_run=True):
                     installed_in=host,
                     stored_in=box,
                     is_container=bool(is_container),
-                    comment=row.get("comment", ""),
                     created_by=user,
                     updated_by=user,
                 )

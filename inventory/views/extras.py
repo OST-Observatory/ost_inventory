@@ -139,7 +139,7 @@ def export_csv(request):
             "id",
             "inventory_number",
             "name",
-            "description",
+            "notes",
             "quantity",
             "quantity_approximate",
             "location_path",
@@ -148,7 +148,6 @@ def export_csv(request):
             "installed_in",
             "categories",
             "project",
-            "comment",
             "is_active",
             "last_seen_at",
         ]
@@ -159,7 +158,7 @@ def export_csv(request):
                 item.pk,
                 sanitize_csv_cell(item.inventory_number),
                 sanitize_csv_cell(item.name),
-                sanitize_csv_cell(item.description),
+                sanitize_csv_cell(item.notes),
                 item.quantity,
                 "yes" if item.quantity_is_approximate else "",
                 sanitize_csv_cell(item.location.path_display()),
@@ -168,7 +167,6 @@ def export_csv(request):
                 sanitize_csv_cell(item.installed_in.inventory_number if item.installed_in_id else ""),
                 sanitize_csv_cell(";".join(c.name for c in item.categories.all())),
                 sanitize_csv_cell(item.project.name if item.project else ""),
-                sanitize_csv_cell(item.comment),
                 item.is_active,
                 item.last_seen_at.isoformat() if item.last_seen_at else "",
             ]

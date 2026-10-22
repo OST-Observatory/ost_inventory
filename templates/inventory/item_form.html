@@ -97,11 +97,8 @@
   </section>
 
   <section class="form-section">
-    <h2>Notes</h2>
-    <div class="field-row">
-      <label>Description {{ form.description }}{{ form.description.errors }}</label>
-      <label>Comment {{ form.comment }}{{ form.comment.errors }}</label>
-    </div>
+    <h2>Notes and photo</h2>
+    <label>Notes {{ form.notes }}{{ form.notes.errors }}</label>
     <label>Photo {{ form.photo }}{{ form.photo.errors }}</label>
     <p class="field-hint">JPEG, PNG, or WebP. Photos over {{ photo_max_bytes|filesizeformat }} are reduced before upload; you can check the result first.</p>
   </section>

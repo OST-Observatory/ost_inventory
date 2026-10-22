@@ -28,7 +28,7 @@ class ItemResource(resources.ModelResource):
         fields = (
             "id",
             "name",
-            "description",
+            "notes",
             "quantity",
             "quantity_is_approximate",
             "project__name",
@@ -36,7 +36,6 @@ class ItemResource(resources.ModelResource):
             "is_container",
             "stored_in",
             "installed_in",
-            "comment",
             "is_active",
         )
 
@@ -56,7 +55,7 @@ class ItemAdmin(ImportExportModelAdmin):
     )
     list_filter = ("is_active", "is_container", "categories", "project", "location")
     search_fields = (
-        "name", "description", "comment", "installed_in__name", "stored_in__name"
+        "name", "notes", "installed_in__name", "stored_in__name"
     )
     raw_id_fields = (
         "location", "project", "installed_in", "stored_in", "created_by", "updated_by"

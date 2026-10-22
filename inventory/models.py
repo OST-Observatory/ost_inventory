@@ -142,9 +142,13 @@ class Project(models.Model):
         return cls.objects.create(name=name), True
 
 
+def _append_note(notes: str, line: str) -> str:
+    return f"{notes.rstrip()}\n\n{line}" if notes.strip() else line
+
+
 class Item(models.Model):
     name = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
     quantity = models.PositiveIntegerField(default=1)
     quantity_is_approximate = models.BooleanField(
         default=False,
@@ -182,7 +186,6 @@ class Item(models.Model):
         editable=False,
         help_text="Items sharing this value are units of the same type.",
     )
-    comment = models.TextField(blank=True)
     photo = models.ImageField(upload_to=item_photo_upload_to, null=True, blank=True)
     categories = models.ManyToManyField(Category, blank=True, related_name="items")
     is_active = models.BooleanField(default=True)
@@ -364,7 +367,7 @@ class Item(models.Model):
     def split_off(self, quantity: int, user, *, location=None, installed_in=None):
         """Move `quantity` units into a new item with its own number.
 
-        The new item copies name, description, project, categories and photo. It is
+        The new item copies name, notes, project, categories and photo. It is
         mounted on `installed_in` (and follows its location) or stored at `location`.
         """
         if not 1 <= quantity < self.quantity:
@@ -375,14 +378,13 @@ class Item(models.Model):
             raise ValidationError("Choose a location or an item to mount on.")
         part = type(self)(
             name=self.name,
-            description=self.description,
+            notes=_append_note(self.notes, f"Split off from {self.inventory_number}."),
             quantity=quantity,
             quantity_is_approximate=self.quantity_is_approximate and quantity > 1,
             project=self.project,
             unit_group=self._ensure_unit_group(),
             location=installed_in.location if installed_in else location,
             installed_in=installed_in,
-            comment=f"Split off from {self.inventory_number}.",
             last_seen_at=timezone.now(),
             created_by=user,
             updated_by=user,
@@ -456,12 +458,12 @@ class Item(models.Model):
         target.updated_by = user
         target.save(update_fields=["quantity", "updated_by", "updated_at"])
         note = f"Merged into {target.inventory_number}."
-        self.comment = f"{self.comment}\n{note}" if self.comment else note
+        self.notes = _append_note(self.notes, note)
         self.is_active = False
         self.installed_in = None
         self.updated_by = user
         self.save(
-            update_fields=["comment", "is_active", "installed_in", "updated_by", "updated_at"]
+            update_fields=["notes", "is_active", "installed_in", "updated_by", "updated_at"]
         )
 
 
