@@ -686,9 +686,7 @@ Optional: `description`, `quantity`, `quantity_approximate` (`yes` / `true` /
 `1`), `categories` (semicolon-separated, max 4), `project`, `comment`,
 `installed_in` (inventory number such as `#0004` or numeric id of the item this
 one is mounted on; the host must already exist), `stored_in` (inventory number
-of the container it is stored in), `is_container` (`yes` / `true` / `1`). The
-old free-text `container` column is still read and written until the container
-migration below has run.
+of the container it is stored in), `is_container` (`yes` / `true` / `1`).
 
 Limits: 2 MB, 2000 rows, 500 characters per field, location depth 2. Formula-looking
 cells are sanitised on export. Web import is under **Tools → Import**; the
@@ -696,28 +694,6 @@ management command is equivalent.
 
 An active item with the same name at the same location is updated; otherwise a
 row is created.
-
-### Container migration (once)
-
-Older versions stored the container as free text on each item. Two commands turn
-that into container items; a person reviews the proposal in between:
-
-```bash
-# On the server, as the app user:
-.venv/bin/python manage.py container_plan --out /tmp/containers.csv
-# Edit the CSV (LibreOffice): column "action" per container text and room is
-#   link (target #0537 becomes the container), new (target = name of a new
-#   container), merge (target = another text in the same room), mount (old
-#   "belongs to" text: target #0693 is the host), clear (drop the text);
-# rows with kind=item override single items: keep, store (#0536 or a container
-# text of that room), mount (#0677), unmount.
-.venv/bin/python manage.py container_apply /tmp/containers.csv          # dry run
-.venv/bin/python manage.py container_apply /tmp/containers.csv --commit --user <name>
-```
-
-The dry run lists every change, including items that move to their container's
-place. Nothing is saved while there are errors. New containers get new numbers
-and need labels (**Tools → Labels**). Back up the database before `--commit`.
 
 ---
 

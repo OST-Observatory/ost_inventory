@@ -4,12 +4,6 @@
 <h1>Containers</h1>
 <p class="muted">Cases, bags, and boxes that other items are stored in. A container is an inventory item, so it has its own number and label; rename it under Edit, merge two with “Move contents…”.</p>
 
-{% if legacy_count %}
-<div class="flash warning">
-  {{ legacy_count }} item{{ legacy_count|pluralize }} still have an old free-text container note. An administrator converts them with <code>manage.py container_plan</code> and <code>container_apply</code>.
-</div>
-{% endif %}
-
 {% if containers %}
 <section class="block-card">
   <table class="item-table">

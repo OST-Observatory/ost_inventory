@@ -140,7 +140,6 @@ def import_rows(rows, *, user, dry_run=True):
             if project_name:
                 project, _ = Project.get_or_create_by_name(project_name)
 
-            container = row.get("container", "").strip()
             approx_raw = row.get("quantity_approximate", "").strip()
             quantity_is_approximate = _as_bool(approx_raw) if approx_raw else None
 
@@ -189,8 +188,6 @@ def import_rows(rows, *, user, dry_run=True):
                 existing.quantity = quantity
                 if "project" in row:
                     existing.project = project
-                if "container" in row:
-                    existing.container = container
                 if quantity_is_approximate is not None:
                     existing.quantity_is_approximate = quantity_is_approximate
                 existing.comment = row.get("comment", existing.comment)
@@ -229,7 +226,6 @@ def import_rows(rows, *, user, dry_run=True):
                     quantity_is_approximate=bool(quantity_is_approximate),
                     project=project,
                     location=location,
-                    container=container,
                     installed_in=host,
                     stored_in=box,
                     is_container=bool(is_container),

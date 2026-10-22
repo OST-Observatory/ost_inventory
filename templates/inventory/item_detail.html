@@ -120,7 +120,6 @@
             {% if not item.stored_in_id %}<span class="muted">(with {{ item.installed_in.inventory_number }} {{ item.installed_in.name }})</span>{% endif %}
           {% else %}—{% endif %}
           {% endwith %}
-          {% if item.container %}<div class="muted">Old container note: “{{ item.container }}”</div>{% endif %}
         </dd>
         <dt>Quantity</dt><dd>{{ item.quantity_display }}</dd>
         <dt>Same type</dt>

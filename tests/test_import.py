@@ -18,8 +18,8 @@ class ImportCommandTests(TransactionTestCase):
 
     def test_dry_run_and_import(self):
         csv_body = (
-            "name,location_path,quantity,quantity_approximate,container,categories,item_type,project,comment\n"
-            "Cable,Lab/Drawer 1,5,yes,Crate 4,Electronics;Cables,USB,Outreach,spare\n"
+            "name,location_path,quantity,quantity_approximate,categories,item_type,project,comment\n"
+            "Cable,Lab/Drawer 1,5,yes,Electronics;Cables,USB,Outreach,spare\n"
         )
         with NamedTemporaryFile("w", suffix=".csv", delete=False) as fh:
             fh.write(csv_body)
@@ -37,7 +37,6 @@ class ImportCommandTests(TransactionTestCase):
             self.assertEqual(item.location.path_display(), "Lab / Drawer 1")
             self.assertEqual(item.quantity, 5)
             self.assertTrue(item.quantity_is_approximate)
-            self.assertEqual(item.container, "Crate 4")
             self.assertEqual(
                 set(item.categories.values_list("name", flat=True)),
                 {"Electronics", "Cables", "USB"},

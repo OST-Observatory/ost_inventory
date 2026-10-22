@@ -60,7 +60,6 @@ def filter_items(
                 SearchVector("name", weight="A")
                 + SearchVector("description", weight="B")
                 + SearchVector("comment", weight="C")
-                + SearchVector("container", weight="B")
             )
             query = SearchQuery(q)
             queryset = (
@@ -75,7 +74,6 @@ def filter_items(
                     | Q(name__icontains=q)
                     | Q(description__icontains=q)
                     | Q(comment__icontains=q)
-                    | Q(container__icontains=q)
                     | related
                     | by_number
                 )
@@ -86,7 +84,6 @@ def filter_items(
                 Q(name__icontains=q)
                 | Q(description__icontains=q)
                 | Q(comment__icontains=q)
-                | Q(container__icontains=q)
                 | related
                 | by_number
             ).order_by("name", "pk")

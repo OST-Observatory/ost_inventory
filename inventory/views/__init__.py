@@ -408,11 +408,6 @@ class ContainerListView(ReadRequiredMixin, ListView):
             content_count=Count("contents", filter=Q(contents__is_active=True))
         )
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["legacy_count"] = Item.objects.exclude(container="").count()
-        return ctx
-
 
 @write_required
 def item_split(request, pk):

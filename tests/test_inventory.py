@@ -973,11 +973,18 @@ class SplitOffTests(TestCase):
         self.lab = Location.objects.create(name="Lab")
         self.shelf = Location.objects.create(name="Shelf 2", parent=self.lab)
         self.dome = Location.objects.create(name="Dome")
+        self.crate = Item.objects.create(
+            name="Crate 4",
+            is_container=True,
+            location=self.shelf,
+            created_by=self.user,
+            updated_by=self.user,
+        )
         self.cables = Item.objects.create(
             name="BNC cable",
             description="1 m, 50 ohm",
             quantity=5,
-            container="Crate 4",
+            stored_in=self.crate,
             location=self.shelf,
             created_by=self.user,
             updated_by=self.user,
@@ -1005,7 +1012,7 @@ class SplitOffTests(TestCase):
             reverse("inventory:item_split", args=[self.cables.pk]),
             {"split-quantity": 2, "split-room": self.dome.pk, "split-place": ""},
         )
-        part = Item.objects.exclude(pk__in=[self.cables.pk, self.scope.pk]).get()
+        part = Item.objects.exclude(pk__in=[self.cables.pk, self.scope.pk, self.crate.pk]).get()
         self.assertRedirects(resp, reverse("inventory:item_detail", args=[part.pk]))
         self.cables.refresh_from_db()
         self.assertEqual(self.cables.quantity, 3)
@@ -1013,7 +1020,7 @@ class SplitOffTests(TestCase):
         self.assertEqual(part.name, "BNC cable")
         self.assertEqual(part.description, "1 m, 50 ohm")
         self.assertEqual(part.location_id, self.dome.pk)
-        self.assertEqual(part.container, "")
+        self.assertIsNone(part.stored_in_id)
         self.assertIn(self.cables.inventory_number, part.comment)
         self.assertEqual([c.name for c in part.categories.all()], ["Cables"])
 
@@ -1047,7 +1054,7 @@ class SplitOffTests(TestCase):
             )
         self.cables.refresh_from_db()
         self.assertEqual(self.cables.quantity, 5)
-        self.assertEqual(Item.objects.count(), 2)
+        self.assertEqual(Item.objects.count(), 3)
 
     def test_split_blocked_while_on_loan(self):
         from datetime import date

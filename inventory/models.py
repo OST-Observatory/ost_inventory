@@ -154,11 +154,6 @@ class Item(models.Model):
         Project, null=True, blank=True, on_delete=models.SET_NULL, related_name="items"
     )
     location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="items")
-    container = models.CharField(
-        max_length=120,
-        blank=True,
-        help_text="Legacy free-text container; replaced by stored_in (see container_plan).",
-    )
     is_container = models.BooleanField(
         default=False,
         help_text="Other items can be stored in this one (case, bag, box).",
@@ -207,7 +202,6 @@ class Item(models.Model):
             models.Index(fields=["location"]),
             models.Index(fields=["is_active"]),
             models.Index(fields=["last_seen_at"]),
-            models.Index(fields=["container"]),
             models.Index(fields=["project"]),
             models.Index(fields=["installed_in"]),
             models.Index(fields=["unit_group"]),
@@ -297,7 +291,6 @@ class Item(models.Model):
     def clean(self):
         super().clean()
         reject_newlines(self.name, "Name")
-        reject_newlines(self.container, "Container")
         if self.installed_in_id and self.stored_in_id:
             raise ValidationError(
                 {

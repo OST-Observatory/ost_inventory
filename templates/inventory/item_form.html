@@ -89,9 +89,6 @@
     <label for="{{ form.stored_in.id_for_label }}">Stored in</label>
     {% include "inventory/partials/item_host_picker.html" with field=form.stored_in exclude_pk=form.instance.pk kind="container" new_name_field=form.new_container_name search_label="Search container" %}
     <p class="field-hint">The case, bag, or box this item is kept in; search, scan its label, or name a new one. A mounted item is stored together with its host.</p>
-    {% if form.instance.container %}
-    <p class="field-hint">Old container note: “{{ form.instance.container }}” (to be migrated).</p>
-    {% endif %}
     <label class="checkbox">
       {{ form.is_container }}
       {{ form.is_container.label }}
