@@ -1,0 +1,7 @@
+<div class="loan-form-grid">
+  <label>{{ form.lender_name.label }} * {{ form.lender_name }}{{ form.lender_name.errors }}</label>
+  <label>{{ form.lender_contact.label }} {{ form.lender_contact }}{{ form.lender_contact.errors }}</label>
+  <label>{{ form.due_date.label }} {{ form.due_date }}{{ form.due_date.errors }}</label>
+  <label>{{ form.note.label }} {{ form.note }}{{ form.note.errors }}</label>
+</div>
+<p class="field-hint">Name and contact are personal data: only people allowed to see borrower details see them, and they are anonymised some time after the item went back. {{ form.due_date.help_text }}</p>

@@ -60,7 +60,7 @@
               {% endif %}
               <a href="{% url 'inventory:containers' %}" {% if current_url_name == "containers" %}aria-current="page"{% endif %}>Containers</a>
               <a href="{% url 'inventory:current_loans' %}" {% if current_url_name == "current_loans" %}aria-current="page"{% endif %}>
-                On loan
+                Loans
                 {% if overdue_loan_count %}<span class="badge-count">{{ overdue_loan_count }}</span>{% endif %}
               </a>
               <a href="{% url 'inventory:loan_history' %}" {% if current_url_name == "loan_history" %}aria-current="page"{% endif %}>Loan history</a>

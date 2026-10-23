@@ -5,6 +5,7 @@ import zipfile
 
 from django.conf import settings
 from django.contrib import messages
+from django.db.models import Exists, OuterRef
 from django.core.management.base import CommandError
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -22,7 +23,7 @@ from inventory.labels import (
     png_filename,
     render_label_png,
 )
-from inventory.models import Item, Location
+from inventory.models import Borrowing, Item, Location
 from inventory.ods import spreadsheet_bytes
 from inventory.printing import PWG_RASTER_FORMAT, PrintError, ipp_print_job, png_to_pwg_raster
 from inventory.policy import visible_items
@@ -52,7 +53,7 @@ def _selected_label_jobs(request):
         url = _absolute_url(request, reverse("item_short", kwargs={"pk": item.pk}))
         png = render_label_png(
             url,
-            item.name,
+            item.label_title,
             item.inventory_number,
             item.location.path_display(),
             size,
@@ -63,7 +64,7 @@ def _selected_label_jobs(request):
             {
                 "kind": "item",
                 "pk": item.pk,
-                "title": item.name,
+                "title": item.label_title,
                 "subtitle": item.inventory_number,
                 "extra": item.location.path_display(),
                 "url": url,
@@ -129,7 +130,12 @@ def export_csv(request):
         project=request.GET.get("project", ""),
         container=request.GET.get("container", ""),
         on_loan=request.GET.get("on_loan") == "1",
+        borrowed=request.GET.get("borrowed") == "1",
         include_inactive=request.GET.get("inactive") == "1" and user_can_see_inactive(request.user),
+    ).annotate(
+        borrowed_now=Exists(
+            Borrowing.objects.filter(item_id=OuterRef("pk"), returned_at__isnull=True)
+        )
     )
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="inventory_export.csv"'
@@ -144,6 +150,7 @@ def export_csv(request):
             "quantity_approximate",
             "location_path",
             "is_container",
+            "is_borrowed",
             "stored_in",
             "installed_in",
             "categories",
@@ -163,6 +170,7 @@ def export_csv(request):
                 "yes" if item.quantity_is_approximate else "",
                 sanitize_csv_cell(item.location.path_display()),
                 "yes" if item.is_container else "",
+                "yes" if item.borrowed_now else "",
                 sanitize_csv_cell(item.stored_in.inventory_number if item.stored_in_id else ""),
                 sanitize_csv_cell(item.installed_in.inventory_number if item.installed_in_id else ""),
                 sanitize_csv_cell(";".join(c.name for c in item.categories.all())),
@@ -307,7 +315,7 @@ def labels_png(request):
         url = _absolute_url(request, reverse("item_short", kwargs={"pk": item.pk}))
         png = render_label_png(
             url,
-            item.name,
+            item.label_title,
             item.inventory_number,
             item.location.path_display(),
             size,

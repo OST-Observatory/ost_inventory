@@ -12,7 +12,8 @@
       {% if item.is_container %}<span class="chip chip-container">Container</span>{% endif %}
       {% if item.is_lent %}<span class="chip chip-loaned">On loan</span>{% endif %}
       {% if not item.is_active %}<span class="chip chip-inactive">Inactive</span>{% endif %}
-      {% if item.is_active and not item.is_lent %}<span class="chip chip-available">Available</span>{% endif %}
+      {% if borrowing %}<span class="chip chip-borrowed">Borrowed</span>{% endif %}
+      {% if item.is_active and not item.is_lent and not borrowing %}<span class="chip chip-available">Available</span>{% endif %}
     </p>
   </header>
 
@@ -70,6 +71,10 @@
         <button type="button" data-dialog-open="merge-dialog">Merge back…</button>
         {% endif %}
         <button type="button" data-dialog-open="same-type-dialog">Same type as…</button>
+        {% endif %}
+        {% if item.is_active and not borrowing and not item.is_lent %}
+        <p class="action-menu-label">Ownership</p>
+        <button type="button" data-dialog-open="borrow-dialog">Mark as borrowed…</button>
         {% endif %}
         <hr>
         {% if item.is_active %}
@@ -212,7 +217,37 @@
 </section>
 {% endif %}
 
-{% if item.is_lent or can_write and item.is_active %}
+{% if borrowing %}
+<section class="block-card borrowed-card" id="borrowed">
+  <h2>Borrowed from someone else</h2>
+  <p>
+    {% if can_see_loan_pii %}
+      <strong>{{ borrowing.lender_name }}</strong>
+      {% if borrowing.lender_contact %}({{ borrowing.lender_contact }}){% endif %}
+      ·
+    {% endif %}
+    since {{ borrowing.borrowed_at|date:"Y-m-d" }}
+    {% if borrowing.due_date %}
+      · return by
+      <span class="{% if borrowing.is_overdue %}chip chip-overdue{% else %}muted{% endif %}">{{ borrowing.due_date|relative_due }}</span>
+      <span class="muted">({{ borrowing.due_date }})</span>
+    {% else %}
+      · <span class="muted">no return date</span>
+    {% endif %}
+  </p>
+  {% if borrowing.note and can_see_loan_pii %}<p class="muted">{{ borrowing.note|linebreaksbr }}</p>{% endif %}
+  <p class="muted">Not ours: it cannot be lent on. Labels for it carry “BORROWED”.</p>
+  {% if can_write %}
+  <form method="post" action="{% url 'inventory:borrowing_give_back' borrowing.pk %}" class="inline js-confirm"
+        data-confirm="Give {{ item.inventory_number }} back to its owner? It is then deactivated here.">
+    {% csrf_token %}
+    <p class="actions-row"><button type="submit" class="ost-btn">Give back</button></p>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if item.is_lent or can_write and item.is_active and not borrowing %}
 <div class="block-card" id="loan">
   {% if item.is_lent %}
     <h2>Current loan</h2>
@@ -374,6 +409,21 @@
     <button type="submit" class="outline secondary">Remove from group</button>
   </form>
   {% endif %}
+</dialog>
+{% endif %}
+
+{% if can_write and item.is_active and not borrowing %}
+<dialog id="borrow-dialog" class="ost-dialog">
+  <form method="post" action="{% url 'inventory:borrowing_create' item.pk %}">
+    {% csrf_token %}
+    <h2>Mark as borrowed…</h2>
+    <p class="muted">This item belongs to someone else, e.g. a telescope a colleague lent us. It stays in the inventory, so our items can be mounted on it, until you give it back.</p>
+    {% include "inventory/partials/borrow_fields.html" with form=borrow_form %}
+    <p class="actions-row">
+      <button type="submit">Save</button>
+      <button type="button" class="outline secondary" data-dialog-close>Cancel</button>
+    </p>
+  </form>
 </dialog>
 {% endif %}
 

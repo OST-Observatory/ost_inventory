@@ -1,5 +1,5 @@
 {% load display %}
-{% if q or selected_category or selected_location or selected_project or selected_container or on_loan %}
+{% if q or selected_category or selected_location or selected_project or selected_container or on_loan or borrowed %}
 <div class="filter-chips">
   {% if q %}
     <a class="chip-filter" href="?{% query_without 'q' %}">“{{ q }}” ×</a>
@@ -18,6 +18,9 @@
   {% endif %}
   {% if on_loan %}
     <a class="chip-filter" href="?{% query_without 'on_loan' %}">On loan ×</a>
+  {% endif %}
+  {% if borrowed %}
+    <a class="chip-filter" href="?{% query_without 'borrowed' %}">Borrowed ×</a>
   {% endif %}
 </div>
 {% endif %}

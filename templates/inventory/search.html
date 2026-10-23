@@ -53,6 +53,10 @@
         <input type="checkbox" name="on_loan" value="1" {% if on_loan %}checked{% endif %}>
         On loan only
       </label>
+      <label class="checkbox">
+        <input type="checkbox" name="borrowed" value="1" {% if borrowed %}checked{% endif %}>
+        Borrowed only
+      </label>
     </div>
     <p class="actions-row">
       <button type="submit">Search</button>

@@ -83,12 +83,12 @@ class PurgePersonalDataTests(TestCase):
         self.assertEqual(self.old_log.object_repr, ANONYMISED)
         self.assertEqual(self.deleted_log.object_repr, ANONYMISED)
         self.assertIn("Bob", self.recent_log.object_repr)
-        self.assertIn("Anonymised 1 loan(s) and 2 admin log", out.getvalue())
+        self.assertIn("Anonymised 1 loan(s), 0 borrowing(s) and 2 admin log", out.getvalue())
 
     def test_dry_run_counts_without_changing(self):
         out = StringIO()
         call_command("purge_personal_data", dry_run=True, stdout=out)
-        self.assertIn("Would anonymise 1 loan(s) and 2 admin log", out.getvalue())
+        self.assertIn("Would anonymise 1 loan(s), 0 borrowing(s) and 2 admin log", out.getvalue())
         self.old.refresh_from_db()
         self.assertEqual(self.old.borrower_name, "Alice")
 
@@ -96,7 +96,7 @@ class PurgePersonalDataTests(TestCase):
         call_command("purge_personal_data", stdout=StringIO())
         out = StringIO()
         call_command("purge_personal_data", stdout=out)
-        self.assertIn("Anonymised 0 loan(s) and 0 admin log", out.getvalue())
+        self.assertIn("Anonymised 0 loan(s), 0 borrowing(s) and 0 admin log", out.getvalue())
 
     def test_expired_sessions_cleared(self):
         expired = SessionStore()

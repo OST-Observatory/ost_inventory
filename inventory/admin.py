@@ -2,7 +2,16 @@ from django.contrib import admin
 from import_export import resources
 from import_export.admin import ImportExportModelAdmin
 
-from .models import Category, Item, Loan, Location, Project, Stocktake, StocktakeScan
+from .models import (
+    Borrowing,
+    Category,
+    Item,
+    Loan,
+    Location,
+    Project,
+    Stocktake,
+    StocktakeScan,
+)
 
 
 class LocationAdmin(admin.ModelAdmin):
@@ -81,10 +90,18 @@ class LoanAdmin(admin.ModelAdmin):
     raw_id_fields = ("item", "recorded_by")
 
 
+class BorrowingAdmin(admin.ModelAdmin):
+    list_display = ("item", "lender_name", "borrowed_at", "due_date", "returned_at", "recorded_by")
+    list_filter = ("due_date",)
+    search_fields = ("lender_name", "lender_contact", "item__name")
+    raw_id_fields = ("item", "recorded_by")
+
+
 admin.site.register(Location, LocationAdmin)
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(Project, ProjectAdmin)
 admin.site.register(Item, ItemAdmin)
 admin.site.register(Loan, LoanAdmin)
+admin.site.register(Borrowing, BorrowingAdmin)
 admin.site.register(Stocktake)
 admin.site.register(StocktakeScan)

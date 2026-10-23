@@ -96,6 +96,14 @@
     {{ form.is_container.errors }}
   </section>
 
+  {% if borrow_form %}
+  <details class="form-section borrow-section"{% if borrowed or borrow_form.errors %} open{% endif %}>
+    <summary>Borrowed from someone else?</summary>
+    <p class="field-hint">Fill in only if the item is not ours, e.g. a telescope a colleague lent us. It is then marked “Borrowed” and can be given back later.</p>
+    {% include "inventory/partials/borrow_fields.html" with form=borrow_form %}
+  </details>
+  {% endif %}
+
   <section class="form-section">
     <h2>Notes and photo</h2>
     <label>Notes {{ form.notes }}{{ form.notes.errors }}</label>

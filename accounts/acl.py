@@ -14,7 +14,7 @@ MANAGE_ACL = "manage_acl"
 CAPABILITIES = (
     (READ, "Read inventory"),
     (WRITE, "Add and edit items, loans, and locations"),
-    (LOAN_PII, "See borrower name and contact"),
+    (LOAN_PII, "See borrower and lender name and contact"),
     (INACTIVE, "See inactive items"),
     (IMPORT, "Import CSV"),
     (LABELS, "Labels"),

@@ -1,20 +1,19 @@
 {% extends "base.html" %}
 {% load display %}
-{% block title %}Currently on loan{% endblock %}
+{% block title %}Loans{% endblock %}
 {% block content %}
-<h1>Currently on loan</h1>
-<p class="muted">Open loans, overdue first. Return an item from this list or from its detail page.</p>
-{% if loans %}
+<h1>Loans</h1>
+<p class="muted">What we lent out, and what we borrowed from others.</p>
+
 <section class="block-card">
-  <table>
+  <h2>Lent out</h2>
+  {% if loans %}
+  <table class="loan-table">
     <thead>
       <tr>
         <th>Due</th>
         <th>Item</th>
-        {% if can_see_loan_pii %}
-        <th>Borrower</th>
-        <th>Contact</th>
-        {% endif %}
+        {% if can_see_loan_pii %}<th>Borrower</th>{% endif %}
         <th></th>
       </tr>
     </thead>
@@ -31,8 +30,7 @@
           </a>
         </td>
         {% if can_see_loan_pii %}
-        <td>{{ loan.borrower_name }}</td>
-        <td>{{ loan.borrower_contact }}</td>
+        <td>{{ loan.borrower_name }}{% if loan.borrower_contact %}<div class="muted">{{ loan.borrower_contact }}</div>{% endif %}</td>
         {% endif %}
         <td class="col-actions">
           {% if can_write %}
@@ -46,11 +44,47 @@
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+  <p class="muted">Nothing on loan. <a href="{% url 'inventory:search' %}">Search inventory</a> to find an item and record a loan.</p>
+  {% endif %}
 </section>
-{% else %}
-<div class="empty-state">
-  <p>Nothing currently on loan.</p>
-  <p class="muted"><a href="{% url 'inventory:search' %}">Search inventory</a> to find an item and record a loan.</p>
-</div>
-{% endif %}
+
+<section class="block-card">
+  <h2>Borrowed from others</h2>
+  {% if borrowings %}
+  <table class="loan-table">
+    <thead>
+      <tr>
+        <th>Return by</th>
+        <th>Item</th>
+        {% if can_see_loan_pii %}<th>Borrowed from</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for borrowing in borrowings %}
+      <tr class="{% if borrowing.is_overdue %}overdue-row{% endif %}">
+        <td>
+          {% if borrowing.due_date %}
+          <span class="{% if borrowing.is_overdue %}chip chip-overdue{% else %}chip chip-borrowed{% endif %}">{{ borrowing.due_date|relative_due }}</span>
+          <div class="muted">{{ borrowing.due_date }}</div>
+          {% else %}
+          <span class="muted">open-ended</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{% url 'inventory:item_detail' borrowing.item_id %}">
+            <span class="inv-badge">{{ borrowing.item.inventory_number }}</span> {{ borrowing.item.name }}
+          </a>
+        </td>
+        {% if can_see_loan_pii %}
+        <td>{{ borrowing.lender_name }}{% if borrowing.lender_contact %}<div class="muted">{{ borrowing.lender_contact }}</div>{% endif %}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Nothing borrowed from others. Use “Borrowed from someone else?” when adding an item, or More → Mark as borrowed… on an item page.</p>
+  {% endif %}
+</section>
 {% endblock %}

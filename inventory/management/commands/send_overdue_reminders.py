@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.conf import settings
 import logging
 
-from inventory.models import Loan
+from inventory.models import Borrowing, Loan
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,10 @@ def _looks_like_email(value: str) -> bool:
 
 
 class Command(BaseCommand):
-    help = "Send overdue loan reminder emails (safe to run daily)."
+    help = (
+        "Send reminder emails for overdue loans and for borrowed items past their "
+        "return date (safe to run daily)."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")
@@ -71,6 +74,45 @@ class Command(BaseCommand):
                 logger.error("Reminder failed for loan %s: %s", loan.pk, type(exc).__name__)
                 self.stderr.write(f"Loan {loan.pk}: send failed")
 
+        borrowed_sent, borrowed_failed = self._remind_borrowings(today, options["dry_run"])
+        sent += borrowed_sent
+        failed += borrowed_failed
+
         self.stdout.write(self.style.SUCCESS(f"Reminders sent: {sent}"))
         if failed:
             self.stderr.write(f"Reminders failed: {failed}")
+
+    def _remind_borrowings(self, today, dry_run):
+        """Items we borrowed and should have given back: remind whoever recorded them."""
+        due = Borrowing.objects.filter(
+            returned_at__isnull=True,
+            due_date__lt=today,
+        ).select_related("item", "recorded_by")
+        sent = failed = 0
+        for borrowing in due:
+            try:
+                if borrowing.last_reminder_sent_at and borrowing.last_reminder_sent_at.date() == today:
+                    continue
+                email = borrowing.recorded_by.email if borrowing.recorded_by else ""
+                if not email:
+                    self.stdout.write(f"Skip borrowing {borrowing.pk}: no email recipient")
+                    continue
+                item = borrowing.item
+                subject = f"[Inventory] Give back: {item.inventory_number} {item.name}"
+                body = (
+                    f"Item {item.inventory_number} ({item.name}) was borrowed from "
+                    f"{borrowing.lender_name} and was due back on {borrowing.due_date}.\n"
+                    f"Give it back (\"Give back\" on the item page) or agree on a new date.\n"
+                )
+                if dry_run:
+                    self.stdout.write(f"DRY RUN would mail 1 recipient for borrowing {borrowing.pk}")
+                    continue
+                send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+                borrowing.last_reminder_sent_at = timezone.now()
+                borrowing.save(update_fields=["last_reminder_sent_at"])
+                sent += 1
+            except Exception as exc:
+                failed += 1
+                logger.error("Reminder failed for borrowing %s: %s", borrowing.pk, type(exc).__name__)
+                self.stderr.write(f"Borrowing {borrowing.pk}: send failed")
+        return sent, failed

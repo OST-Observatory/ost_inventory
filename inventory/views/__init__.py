@@ -20,6 +20,7 @@ from accounts.permissions import (
     write_required,
 )
 from inventory.forms import (
+    BorrowingForm,
     InstalledInForm,
     ItemForm,
     LoanForm,
@@ -40,7 +41,7 @@ from inventory.labels import (
     get_label_code,
     get_label_size,
 )
-from inventory.models import Category, Item, Loan, Location, Project
+from inventory.models import Borrowing, Category, Item, Loan, Location, Project
 from inventory.policy import visible_items
 from inventory.search import _inventory_number_q, filter_items
 from inventory.stocktake import get_open_stocktake, record_item_scan, set_active_stocktake
@@ -77,6 +78,11 @@ class SearchView(ReadRequiredMixin, ListView):
                 queryset=Loan.objects.filter(returned_at__isnull=True),
                 to_attr="open_loans",
             ),
+            Prefetch(
+                "borrowings",
+                queryset=Borrowing.objects.filter(returned_at__isnull=True),
+                to_attr="open_borrowings",
+            ),
         )
         return filter_items(
             qs,
@@ -86,6 +92,7 @@ class SearchView(ReadRequiredMixin, ListView):
             project=self.request.GET.get("project", ""),
             container=self.request.GET.get("container", ""),
             on_loan=self.request.GET.get("on_loan") == "1",
+            borrowed=self.request.GET.get("borrowed") == "1",
             include_inactive=self.request.GET.get("inactive") == "1"
             and user_can_see_inactive(self.request.user),
         )
@@ -103,6 +110,7 @@ class SearchView(ReadRequiredMixin, ListView):
         ctx["selected_project"] = self.request.GET.get("project", "")
         ctx["selected_container"] = self.request.GET.get("container", "")
         ctx["on_loan"] = self.request.GET.get("on_loan") == "1"
+        ctx["borrowed"] = self.request.GET.get("borrowed") == "1"
         ctx["categories"] = Category.objects.all()
         ctx["locations"] = Location.objects.all().select_related("parent")
         ctx["projects"] = Project.objects.all()
@@ -152,6 +160,8 @@ class ItemDetailView(ReadRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["loan_form"] = LoanForm()
+        ctx["borrow_form"] = BorrowingForm()
+        ctx["borrowing"] = self.object.current_borrowing
         ctx["loans"] = self.object.loans.all()
         ctx["label_sizes"] = LABEL_SIZE_LIST
         ctx["selected_size"] = self.request.session.get(
@@ -195,11 +205,35 @@ class ItemCreateView(WriteRequiredMixin, CreateView):
     form_class = ItemForm
     template_name = "inventory/item_form.html"
 
+    def borrowed(self):
+        """A lender name in the optional "Borrowed from" section marks the item as not ours."""
+        return self.request.method == "POST" and bool(
+            (self.request.POST.get("borrow-lender_name") or "").strip()
+        )
+
+    def get_borrow_form(self):
+        if not hasattr(self, "_borrow_form"):
+            data = self.request.POST if self.borrowed() else None
+            self._borrow_form = BorrowingForm(data)
+        return self._borrow_form
+
     def form_valid(self, form):
+        borrow_form = self.get_borrow_form()
+        if self.borrowed() and not borrow_form.is_valid():
+            return self.form_invalid(form)
         form.instance.created_by = self.request.user
         form.instance.updated_by = self.request.user
-        messages.success(self.request, "Item created.")
-        return super().form_valid(form)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            if self.borrowed():
+                borrowing = borrow_form.save(commit=False)
+                borrowing.item = self.object
+                borrowing.recorded_by = self.request.user
+                borrowing.save()
+        messages.success(
+            self.request, "Borrowed item recorded." if self.borrowed() else "Item created."
+        )
+        return response
 
     def get_success_url(self):
         return reverse("inventory:item_detail", kwargs={"pk": self.object.pk})
@@ -208,6 +242,8 @@ class ItemCreateView(WriteRequiredMixin, CreateView):
         ctx = super().get_context_data(**kwargs)
         ctx.update(_item_form_catalogs())
         ctx["title"] = "Add item"
+        ctx["borrow_form"] = self.get_borrow_form()
+        ctx["borrowed"] = self.borrowed()
         return ctx
 
 
@@ -489,6 +525,9 @@ def loan_create(request, pk):
     if item.is_lent:
         messages.error(request, "Item is already on loan.")
         return redirect("inventory:item_detail", pk=pk)
+    if item.is_borrowed:
+        messages.error(request, "This item is borrowed from someone else and cannot be lent on.")
+        return redirect("inventory:item_detail", pk=pk)
     if request.method != "POST":
         return HttpResponseBadRequest("POST required")
     form = LoanForm(request.POST)
@@ -514,6 +553,47 @@ def loan_return(request, pk):
 
 
 @write_required
+@require_POST
+def borrowing_create(request, pk):
+    """Mark an existing item as borrowed from someone else."""
+    item = get_object_or_404(Item, pk=pk, is_active=True)
+    if item.is_borrowed:
+        messages.error(request, "This item is already marked as borrowed.")
+        return redirect("inventory:item_detail", pk=pk)
+    if item.is_lent:
+        messages.error(request, "The item is lent out; record its return first.")
+        return redirect("inventory:item_detail", pk=pk)
+    form = BorrowingForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Could not record the borrowing. Check the form.")
+        return redirect("inventory:item_detail", pk=pk)
+    borrowing = form.save(commit=False)
+    borrowing.item = item
+    borrowing.recorded_by = request.user
+    borrowing.save()
+    messages.success(request, "Marked as borrowed.")
+    return redirect("inventory:item_detail", pk=pk)
+
+
+@write_required
+@require_POST
+def borrowing_give_back(request, pk):
+    borrowing = get_object_or_404(
+        Borrowing.objects.select_related("item"), pk=pk, returned_at__isnull=True
+    )
+    try:
+        borrowing.give_back(request.user)
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0])
+        return redirect("inventory:item_detail", pk=borrowing.item_id)
+    messages.success(
+        request,
+        f"{borrowing.item.inventory_number} given back to its owner; the item is now inactive.",
+    )
+    return redirect("inventory:item_detail", pk=borrowing.item_id)
+
+
+@write_required
 def still_here(request, pk):
     item = get_object_or_404(Item, pk=pk)
     if request.method != "POST":
@@ -525,6 +605,8 @@ def still_here(request, pk):
     if not hx:
         messages.success(request, "Marked as still here.")
     if hx:
+        item.open_loans = list(item.loans.filter(returned_at__isnull=True))
+        item.open_borrowings = list(item.borrowings.filter(returned_at__isnull=True))
         return render(request, "inventory/partials/still_here_ok.html", {"item": item})
     return redirect("inventory:item_detail", pk=pk)
 
@@ -596,6 +678,15 @@ class CurrentLoansView(ReadRequiredMixin, ListView):
             .select_related("item", "item__location", "recorded_by")
             .order_by("due_date")
         )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["borrowings"] = (
+            Borrowing.objects.filter(returned_at__isnull=True)
+            .select_related("item", "item__location", "recorded_by")
+            .order_by(F("due_date").asc(nulls_last=True), "borrowed_at")
+        )
+        return ctx
 
 
 class LoanHistoryView(ReadRequiredMixin, ListView):

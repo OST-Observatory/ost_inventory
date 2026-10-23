@@ -6,7 +6,7 @@ from django.db.models import Q
 from inventory.images import process_item_photo
 from inventory.validators import reject_newlines, validate_optional_email_or_text
 
-from .models import MAX_CATEGORIES, Category, Item, Loan, Location, Project
+from .models import MAX_CATEGORIES, Borrowing, Category, Item, Loan, Location, Project
 
 
 CATEGORY_SLOTS = tuple(f"category_{i}" for i in range(1, MAX_CATEGORIES + 1))
@@ -507,6 +507,37 @@ class LoanForm(forms.ModelForm):
         note = self.cleaned_data.get("note") or ""
         reject_newlines(note, "Note")
         return note
+
+
+class BorrowingForm(forms.ModelForm):
+    """We borrowed the item: who from, and until when (optional)."""
+
+    class Meta:
+        model = Borrowing
+        fields = ["lender_name", "lender_contact", "due_date", "note"]
+        labels = {
+            "lender_name": "Borrowed from",
+            "lender_contact": "Contact",
+            "due_date": "Return by",
+        }
+        widgets = {
+            "due_date": forms.DateInput(attrs={"type": "date"}),
+            "note": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("prefix", "borrow")
+        super().__init__(*args, **kwargs)
+        self.fields["lender_name"].widget.attrs["placeholder"] = "Person or institution"
+        self.fields["due_date"].help_text = "Optional; a reminder is sent when it has passed."
+
+    def clean_lender_name(self):
+        name = self.cleaned_data.get("lender_name") or ""
+        reject_newlines(name, "Lender name")
+        return name
+
+    def clean_lender_contact(self):
+        return validate_optional_email_or_text(self.cleaned_data.get("lender_contact") or "")
 
 
 class RoomForm(forms.Form):

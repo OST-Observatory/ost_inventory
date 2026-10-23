@@ -33,6 +33,15 @@ confirmation. Without JavaScript the server reduces uploads up to
 - **Loans** — one open loan per item, due date, optional borrower contact.
 Borrower name and contact are hidden unless the user has that permission.
 Overdue reminders can be sent daily.
+- **Borrowed items** — things that belong to someone else (e.g. a colleague's
+telescope) are added with **Borrowed from someone else?** in the item form or
+**More → Mark as borrowed…**: lender, optional contact and return date. They
+show a **Borrowed** badge, cannot be lent on, and their labels read
+“BORROWED · name”. **Give back** records the return and deactivates the item; it
+is refused while our own items are still mounted on or stored in it. Lender name
+and contact follow the borrower rules (visible with the same permission,
+anonymised by `purge_personal_data`); a reminder goes to whoever recorded the
+borrowing once a return date has passed. **Tools → Loans** lists both directions.
 - **Locations** — rooms and places, with a per-location item list.
 - **Containers** — a case, bag, or box is an item marked **container**, so it
 keeps its own number, label, photo, and loans. Items are **stored in** a

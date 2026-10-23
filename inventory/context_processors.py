@@ -2,7 +2,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from accounts.permissions import user_can_read, user_can_write
-from inventory.models import Loan
+from inventory.models import Borrowing, Loan
 from inventory.stocktake import SESSION_KEY
 
 
@@ -10,10 +10,8 @@ def nav(request):
     user = getattr(request, "user", None)
     count = 0
     if user_can_read(user):
-        count = Loan.objects.filter(
-            returned_at__isnull=True,
-            due_date__lt=timezone.localdate(),
-        ).count()
+        overdue = {"returned_at__isnull": True, "due_date__lt": timezone.localdate()}
+        count = Loan.objects.filter(**overdue).count() + Borrowing.objects.filter(**overdue).count()
     match = getattr(request, "resolver_match", None)
     active_id = None
     if user_can_write(user):

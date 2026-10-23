@@ -73,7 +73,7 @@
 <div class="empty-state">
   <p>No items found.</p>
   <p class="muted">Try clearing filters{% if can_write %} or <a href="{% url 'inventory:item_create' %}">add an item</a>{% endif %}.</p>
-  {% if q or selected_category or selected_location or selected_project or selected_container or on_loan %}
+  {% if q or selected_category or selected_location or selected_project or selected_container or on_loan or borrowed %}
     <p><a href="{% url 'inventory:search' %}">Reset search</a></p>
   {% endif %}
 </div>

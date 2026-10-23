@@ -1,7 +1,10 @@
-{% if item.open_loans or item.is_lent %}
+{# Needs item.open_loans and item.open_borrowings (prefetched lists). #}
+{% if item.open_loans %}
   <span class="chip chip-loaned">On loan</span>
 {% elif not item.is_active %}
   <span class="chip chip-inactive">Inactive</span>
+{% elif item.open_borrowings %}
+  <span class="chip chip-borrowed">Borrowed</span>
 {% else %}
   <span class="chip chip-available">Available</span>
 {% endif %}

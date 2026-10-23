@@ -229,6 +229,19 @@ class Item(models.Model):
         return self.current_loan is not None
 
     @property
+    def current_borrowing(self):
+        return self.borrowings.filter(returned_at__isnull=True).first()
+
+    @property
+    def is_borrowed(self) -> bool:
+        """Borrowed from someone else, i.e. not ours."""
+        return self.current_borrowing is not None
+
+    @property
+    def label_title(self) -> str:
+        return f"BORROWED · {self.name}" if self.is_borrowed else self.name
+
+    @property
     def quantity_display(self) -> str:
         if self.quantity_is_approximate:
             return f"~{self.quantity}"
@@ -509,6 +522,72 @@ class Loan(models.Model):
     def return_item(self):
         self.returned_at = timezone.now()
         self.save(update_fields=["returned_at"])
+
+
+class Borrowing(models.Model):
+    """An item we borrowed from someone else: the reverse of Loan."""
+
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="borrowings")
+    lender_name = models.CharField(max_length=200)
+    lender_contact = models.CharField(max_length=200, blank=True)
+    borrowed_at = models.DateTimeField(default=timezone.now)
+    due_date = models.DateField(
+        null=True, blank=True, help_text="When it has to go back; leave empty if open-ended."
+    )
+    returned_at = models.DateTimeField(null=True, blank=True)
+    note = models.TextField(blank=True)
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="borrowings_recorded"
+    )
+    last_reminder_sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-borrowed_at"]
+        indexes = [models.Index(fields=["due_date"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["item"],
+                condition=Q(returned_at__isnull=True),
+                name="one_open_borrowing_per_item",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item} ← {self.lender_name}"
+
+    @property
+    def is_overdue(self) -> bool:
+        if self.returned_at or not self.due_date:
+            return False
+        return self.due_date < timezone.localdate()
+
+    def clean(self):
+        super().clean()
+        reject_newlines(self.lender_name, "Lender name")
+        self.lender_contact = validate_optional_email_or_text(self.lender_contact or "")
+
+    @transaction.atomic
+    def give_back(self, user):
+        """Record the return to the owner; the item leaves the inventory (deactivated)."""
+        item = self.item
+        ours = Item.objects.filter(pk__in=item.dependent_pks(), is_active=True).order_by("pk")
+        if ours.exists():
+            listed = ", ".join(f"{i.inventory_number} {i.name}" for i in ours[:5])
+            raise ValidationError(f"Take off or out our items first: {listed}.")
+        if item.is_lent:
+            raise ValidationError("The item is lent out; record its return first.")
+        self.returned_at = timezone.now()
+        self.save(update_fields=["returned_at"])
+        item.notes = _append_note(item.notes, f"Given back to its owner on {timezone.localdate():%Y-%m-%d}.")
+        item.is_active = False
+        item.installed_in = None
+        item.stored_in = None
+        item.updated_by = user
+        item.save(
+            update_fields=[
+                "notes", "is_active", "installed_in", "stored_in", "updated_by", "updated_at"
+            ]
+        )
 
 
 class Stocktake(models.Model):

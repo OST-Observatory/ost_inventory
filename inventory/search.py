@@ -33,10 +33,11 @@ def filter_items(
     project="",
     container="",
     on_loan=False,
+    borrowed=False,
     include_inactive=False,
 ):
     """Filter items for search UI. SQLite: icontains; PostgreSQL: full-text + trigram."""
-    from inventory.models import Category, Loan, Location
+    from inventory.models import Borrowing, Category, Loan, Location
 
     if not include_inactive:
         queryset = queryset.filter(is_active=True)
@@ -110,6 +111,11 @@ def filter_items(
     if on_loan:
         queryset = queryset.filter(
             Exists(Loan.objects.filter(item_id=OuterRef("pk"), returned_at__isnull=True))
+        )
+
+    if borrowed:
+        queryset = queryset.filter(
+            Exists(Borrowing.objects.filter(item_id=OuterRef("pk"), returned_at__isnull=True))
         )
 
     return queryset

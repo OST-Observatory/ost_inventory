@@ -762,6 +762,7 @@ td:has(.inline),
 .chip-inactive { background: #e4e1dc; color: #555; }
 .chip-available { background: #d8efe3; color: var(--available); }
 .chip-container { background: #dde6f3; color: #2b4a75; }
+.chip-borrowed { background: #ead9f2; color: #5b2f74; }
 .chip-filter {
   display: inline-flex;
   align-items: center;
@@ -779,6 +780,7 @@ td:has(.inline),
 [data-theme="dark"] .chip-inactive { background: #2a3142; color: #c5c9d4; }
 [data-theme="dark"] .chip-available { background: #1e3a30; }
 [data-theme="dark"] .chip-container { background: #24324a; color: #b9cbe8; }
+[data-theme="dark"] .chip-borrowed { background: #3a2848; color: #dcc2ec; }
 [data-theme="dark"] .chip-filter { background: #2a3142; }
 [data-theme="dark"] .chip-filter:hover { background: #343c50; }
 [data-theme="dark"] .inv-badge { background: #2a3142; }
@@ -857,6 +859,14 @@ body > footer.site-footer {
 }
 .site-footer a { color: var(--ost-muted); }
 .site-footer a:hover { color: var(--ost-ink); }
+
+.borrowed-card { border-left: 4px solid #8a5aa6; }
+.loan-table td .muted { overflow-wrap: anywhere; }
+@media (max-width: 39.99rem) {
+  .loan-table :is(td, th) { padding: 0.45rem 0.4rem; }
+}
+.borrow-section > summary { font-weight: 650; }
+.borrow-section[open] > summary { margin-bottom: 0.75rem; }
 
 .block-card,
 .form-section,
