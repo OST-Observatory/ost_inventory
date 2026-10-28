@@ -206,15 +206,16 @@ class ItemCreateView(WriteRequiredMixin, CreateView):
     template_name = "inventory/item_form.html"
 
     def borrowed(self):
-        """A lender name in the optional "Borrowed from" section marks the item as not ours."""
-        return self.request.method == "POST" and bool(
-            (self.request.POST.get("borrow-lender_name") or "").strip()
-        )
+        """Anything filled in the optional "Borrowed from" section marks the item as not ours."""
+        if self.request.method != "POST":
+            return False
+        fields = ("lender_name", "lender_contact", "due_date", "note")
+        return any((self.request.POST.get(f"borrow-{f}") or "").strip() for f in fields)
 
     def get_borrow_form(self):
         if not hasattr(self, "_borrow_form"):
             data = self.request.POST if self.borrowed() else None
-            self._borrow_form = BorrowingForm(data)
+            self._borrow_form = BorrowingForm(data, optional=True)
         return self._borrow_form
 
     def form_valid(self, form):

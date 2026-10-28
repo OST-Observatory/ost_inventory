@@ -1,5 +1,5 @@
 <div class="loan-form-grid">
-  <label>{{ form.lender_name.label }} * {{ form.lender_name }}{{ form.lender_name.errors }}</label>
+  <label>{{ form.lender_name.label }}{% if form.lender_name.field.required %} *{% endif %} {{ form.lender_name }}{{ form.lender_name.errors }}</label>
   <label>{{ form.lender_contact.label }} {{ form.lender_contact }}{{ form.lender_contact.errors }}</label>
   <label>{{ form.due_date.label }} {{ form.due_date }}{{ form.due_date.errors }}</label>
   <label>{{ form.note.label }} {{ form.note }}{{ form.note.errors }}</label>

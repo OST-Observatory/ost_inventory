@@ -1,3 +1,4 @@
+import re
 from datetime import date, timedelta
 from io import StringIO
 
@@ -67,6 +68,31 @@ class BorrowingTests(TestCase):
         self.assertFalse(Item.objects.get(name="Own scope").is_borrowed)
         form = self.client.get(reverse("inventory:item_create"))
         self.assertContains(form, "Borrowed from someone else?")
+        # The browser must not demand a lender for the many items that are ours.
+        lender = re.search(r'<input[^>]*name="borrow-lender_name"[^>]*>', form.content.decode()).group(0)
+        self.assertNotIn("required", lender)
+        self.assertNotContains(form, "Borrowed from *")
+
+    def test_return_date_without_lender_is_flagged(self):
+        resp = self.client.post(
+            reverse("inventory:item_create"),
+            {
+                "name": "Half filled",
+                "room": self.dome.pk,
+                "quantity": 1,
+                "category_1": "Telescope",
+                "borrow-due_date": "2030-01-31",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Who lent it?")
+        self.assertFalse(Item.objects.filter(name="Half filled").exists())
+
+    def test_mark_as_borrowed_dialog_requires_lender(self):
+        scope = self.make("C8")
+        page = self.client.get(reverse("inventory:item_detail", args=[scope.pk])).content.decode()
+        lender = re.search(r'<input[^>]*name="borrow-lender_name"[^>]*>', page).group(0)
+        self.assertIn("required", lender)
 
     def test_mark_existing_item_and_no_lending_on(self):
         scope = self.make("C8")

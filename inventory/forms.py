@@ -525,9 +525,11 @@ class BorrowingForm(forms.ModelForm):
             "note": forms.Textarea(attrs={"rows": 2}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, optional=False, **kwargs):
+        """optional: part of the add-item form, where most items are simply ours."""
         kwargs.setdefault("prefix", "borrow")
         super().__init__(*args, **kwargs)
+        self.fields["lender_name"].required = not optional
         self.fields["lender_name"].widget.attrs["placeholder"] = "Person or institution"
         self.fields["due_date"].help_text = "Optional; a reminder is sent when it has passed."
 
@@ -538,6 +540,15 @@ class BorrowingForm(forms.ModelForm):
 
     def clean_lender_contact(self):
         return validate_optional_email_or_text(self.cleaned_data.get("lender_contact") or "")
+
+    def clean(self):
+        cleaned = super().clean()
+        others = ("lender_contact", "due_date", "note")
+        if not cleaned.get("lender_name") and any(cleaned.get(f) for f in others):
+            self.add_error(
+                "lender_name", "Who lent it? Or clear this section if the item is ours."
+            )
+        return cleaned
 
 
 class RoomForm(forms.Form):
